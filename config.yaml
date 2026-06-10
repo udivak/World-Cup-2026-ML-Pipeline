@@ -1,0 +1,16 @@
+db_schema: wc2026
+
+elo:
+  k: 32
+  home_advantage: 100
+  mov: true          # margin-of-victory adjustment
+
+form:
+  window_n: 10       # last N matches for rolling form
+
+train_cutoff_date: "2024-01-01"
+
+rng:
+  seed: 42
+
+raw_data_dir: data/raw

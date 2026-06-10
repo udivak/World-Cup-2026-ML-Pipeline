@@ -1,0 +1,12 @@
+pandas
+numpy
+scikit-learn
+pyyaml
+requests
+beautifulsoup4
+matplotlib
+jupyter
+pytest
+sqlalchemy
+psycopg2-binary
+python-dotenv
