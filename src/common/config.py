@@ -53,6 +53,20 @@ class SquadConfig:
 
 
 @dataclass
+class RosterSource:
+    tournament: str
+    edition_year: int
+    start_date: str
+    wiki_page: str
+
+
+@dataclass
+class RostersConfig:
+    raw_subdir: str = "rosters"
+    sources: list[RosterSource] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     db_schema: str = "wc2026"
     elo: EloConfig = field(default_factory=EloConfig)
@@ -62,6 +76,7 @@ class Config:
     raw_data_dir: str = "data/raw"
     player_data: PlayerDataConfig = field(default_factory=PlayerDataConfig)
     squad: SquadConfig = field(default_factory=SquadConfig)
+    rosters: RostersConfig = field(default_factory=RostersConfig)
     tournaments: list[str] = field(default_factory=list)
 
 
@@ -77,6 +92,12 @@ def load_config(path: Path | None = None) -> Config:
         caps=SourceDirConfig(**pd_raw.get("caps", {"raw_subdir": "caps"})),
     )
 
+    r_raw = raw.get("rosters", {})
+    rosters = RostersConfig(
+        raw_subdir=r_raw.get("raw_subdir", "rosters"),
+        sources=[RosterSource(**s) for s in r_raw.get("sources", [])],
+    )
+
     return Config(
         db_schema=raw.get("db_schema", "wc2026"),
         elo=EloConfig(**raw.get("elo", {})),
@@ -86,6 +107,7 @@ def load_config(path: Path | None = None) -> Config:
         raw_data_dir=raw.get("raw_data_dir", "data/raw"),
         player_data=player_data,
         squad=SquadConfig(**raw.get("squad", {})),
+        rosters=rosters,
         tournaments=raw.get("tournaments", []),
     )
 
@@ -100,4 +122,5 @@ if __name__ == "__main__":
     print(f"raw_data_dir: {cfg.raw_data_dir}")
     print(f"fifa.seasons: {cfg.player_data.fifa.seasons}, fifa.raw_subdir: {cfg.player_data.fifa.raw_subdir}")
     print(f"squad: {cfg.squad.size} = {cfg.squad.starting_xi} + {cfg.squad.substitutes}, formation: {cfg.squad.formation}")
+    print(f"rosters: {len(cfg.rosters.sources)} sources → {[s.wiki_page for s in cfg.rosters.sources]}")
     print(f"tournaments: {len(cfg.tournaments)} configured")

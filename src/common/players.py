@@ -78,6 +78,7 @@ class PlayerCanonicalizer:
     def __init__(self, players: Optional[Iterable[dict]] = None) -> None:
         self._full: dict[tuple[str, Optional[str], Optional[str]], int] = {}
         self._by_name: dict[str, set[int]] = {}
+        self._by_birthdate: dict[str, set[int]] = {}
         self._records: dict[int, dict] = {}
         self._next_id = 1
         self.unmatched: list[dict] = []
@@ -121,6 +122,8 @@ class PlayerCanonicalizer:
         nat = _norm_nat(nationality)
         self._full[(norm, bd, nat)] = pid
         self._by_name.setdefault(norm, set()).add(pid)
+        if bd is not None:
+            self._by_birthdate.setdefault(bd, set()).add(pid)
         self._records[pid] = {
             "player_id": pid,
             "canonical_name": name,
@@ -130,6 +133,28 @@ class PlayerCanonicalizer:
         }
         if pid >= self._next_id:
             self._next_id = pid + 1
+
+    def _token_birthdate_match(
+        self, norm: str, bd: str, nat: Optional[str]
+    ) -> Optional[int]:
+        """Unique same-birthdate player whose name tokens nest with the query's, or None."""
+        q_tokens = set(norm.split())
+        if not q_tokens:
+            return None
+        matches = set()
+        for pid in self._by_birthdate.get(bd, set()):
+            cand_tokens = set(self._records[pid]["normalized_name"].split())
+            if q_tokens <= cand_tokens or cand_tokens <= q_tokens:
+                matches.add(pid)
+        if len(matches) == 1:
+            return next(iter(matches))
+        if len(matches) > 1 and nat is not None:
+            nat_matches = {
+                pid for pid in matches if self._records[pid]["nationality"] == nat
+            }
+            if len(nat_matches) == 1:
+                return next(iter(nat_matches))
+        return None
 
     # ------------------------------------------------------------------ public API
     def add(self, name: Any, birthdate: Any = None, nationality: Any = None) -> int:
@@ -169,6 +194,28 @@ class PlayerCanonicalizer:
         exact = self._full.get((norm, bd, nat))
         if exact is not None:
             return exact
+
+        # Birthdate is a strong disambiguator. Roster spellings often carry a DOB but a
+        # nationality string that differs from FIFA's (e.g. "South Korea" vs "Korea
+        # Republic"), so the exact triple misses. If (name, birthdate) is unique, accept
+        # it regardless of the nationality string.
+        if bd is not None:
+            bd_matches = {
+                pid
+                for pid in self._by_name.get(norm, set())
+                if self._records[pid]["birthdate"] == bd
+            }
+            if len(bd_matches) == 1:
+                return next(iter(bd_matches))
+
+            # Common names drop or add the middle names FIFA's legal long_name carries
+            # ("Lionel Messi" vs "Lionel Andrés Messi"; "Richarlison" vs "Richarlison de
+            # Andrade"). Among players sharing this exact birthdate, accept the one whose
+            # name tokens are a superset/subset of the query's — if unique (birthdate makes
+            # this high-precision). Prefer a nationality match to break ties.
+            token_match = self._token_birthdate_match(norm, bd, nat)
+            if token_match is not None:
+                return token_match
 
         candidates = self._by_name.get(norm, set())
         if nat is not None and candidates:

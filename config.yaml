@@ -22,6 +22,30 @@ player_data:
   caps:
     raw_subdir: caps
 
+# Real squad lists to ingest (Phase 2). Each maps a tournament edition to its Wikipedia
+# "<event> squads" article and its start date. start_date drives nearest-PRIOR FIFA edition
+# selection (no leakage). edition_year is the tournament's branding year (Euro 2020 was
+# played in 2021 — start_date reflects the real date, edition_year the brand).
+rosters:
+  raw_subdir: rosters
+  sources:
+    - tournament: "FIFA World Cup"
+      edition_year: 2018
+      start_date: "2018-06-14"
+      wiki_page: "2018 FIFA World Cup squads"
+    - tournament: "UEFA Euro"
+      edition_year: 2020
+      start_date: "2021-06-11"
+      wiki_page: "UEFA Euro 2020 squads"
+    - tournament: "FIFA World Cup"
+      edition_year: 2022
+      start_date: "2022-11-20"
+      wiki_page: "2022 FIFA World Cup squads"
+    - tournament: "FIFA World Cup"
+      edition_year: 2026
+      start_date: "2026-06-11"
+      wiki_page: "2026 FIFA World Cup squads"
+
 # Tournaments that count as "major tournament" matches for the supervised label subset.
 tournaments:
   - FIFA World Cup

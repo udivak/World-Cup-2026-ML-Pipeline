@@ -24,8 +24,14 @@ No deep learning, no paid APIs.
 (player profiles) is **implemented**: FIFA editions 2018/2020/2022 ingested into
 `wc2026.player_attributes` (33,337 canonical players, ~55.5k attribute rows, full attribute long tail
 in `attrs JSONB`), player canonicalization on `(normalized_name, birthdate, nationality)`, plus FM/caps
-loaders that degrade gracefully until exports are dropped into `data/raw/{fm,caps}/`. The project
-pivoted from team-identity (Elo/form) features to player-profile features; Phases 2+ build on this.
+loaders that degrade gracefully until exports are dropped into `data/raw/{fm,caps}/`. Phase 2
+(squads + team profiles) is **implemented**: `rosters` ingested by scraping Wikipedia "<event> squads"
+articles (2018/2022 World Cups, Euro 2020, 2026 World Cup — 3.4k roster rows, 64 squads; ~85–92%
+player match on FIFA-overlapping editions via a DOB-aware token canonicalizer), and 136 `team_profiles`
+aggregated bottom-up (positional unit strengths, star power, depth, experience, age, market value,
+top-5-league share) with strict nearest-prior FIFA-edition joins (Euro 2020 → FIFA 20, never FIFA 22 —
+no leakage). The project pivoted from team-identity (Elo/form) features to player-profile features;
+Phase 3 (model + backtest) builds on `team_profiles`.
 
 ## Phases (build in order; each has a gate)
 

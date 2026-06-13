@@ -103,6 +103,29 @@ def test_write_review_emits_csv_and_log(canon, tmp_path):
     assert "Ghost" in csv_path.read_text()
 
 
+def test_canonicalize_token_subset_with_birthdate(canon):
+    # FIFA carries the full legal name; the roster uses the common name. Same birthdate +
+    # nested name tokens → match (the main lever for roster recall).
+    pid = canon.add("Lionel Andrés Messi", "1987-06-24", "Argentina")
+    assert canon.canonicalize("Lionel Messi", "1987-06-24", "Argentina") == pid
+    # Single-token common name (Richarlison) still resolves via birthdate.
+    rich = canon.add("Richarlison de Andrade", "1997-05-10", "Brazil")
+    assert canon.canonicalize("Richarlison", "1997-05-10", "Brazil") == rich
+
+
+def test_token_subset_requires_matching_birthdate(canon):
+    canon.add("Lionel Andrés Messi", "1987-06-24", "Argentina")
+    # Right name tokens but a different birthdate → not the same person.
+    assert canon.canonicalize("Lionel Messi", "1990-01-01", "Argentina") is None
+
+
+def test_token_subset_ambiguous_returns_none(canon):
+    # Two same-birthdate players whose tokens both nest with "Silva" → ambiguous, no guess.
+    canon.add("Silva Santos", "1995-01-01", "Brazil")
+    canon.add("Silva Costa", "1995-01-01", "Brazil")
+    assert canon.canonicalize("Silva", "1995-01-01", "Brazil") is None
+
+
 def test_seed_from_existing_records_reuses_ids():
     seed = [
         {"player_id": 7, "canonical_name": "Bukayo Saka", "birthdate": "2001-09-05", "nationality": "England"},
