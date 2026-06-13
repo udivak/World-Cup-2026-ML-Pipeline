@@ -1,14 +1,46 @@
 db_schema: wc2026
 
+# Squad assembly (2026 WC rules): 26-man squad = best XI (11) + 15 substitutes.
+# Best XI fills the formation below (by player overall within each unit); the rest are depth.
+squad:
+  size: 26
+  starting_xi: 11
+  substitutes: 15
+  formation:        # must sum to starting_xi
+    gk: 1
+    def: 4
+    mid: 3
+    att: 3
+
+# Player-attribute sources (free; cached under raw_data_dir). Ingest wide, select narrow.
+player_data:
+  fifa:
+    seasons: [2010, 2026]   # inclusive range of editions to ingest (FIFA 10 → FC26 where available)
+    raw_subdir: fifa
+  fm:
+    raw_subdir: fm
+  caps:
+    raw_subdir: caps
+
+# Tournaments that count as "major tournament" matches for the supervised label subset.
+tournaments:
+  - FIFA World Cup
+  - UEFA Euro
+  - Copa América
+  - African Cup of Nations
+  - AFC Asian Cup
+  - Gold Cup
+  - Confederations Cup
+  - UEFA Nations League
+
+# Across-edition, time-based split: train on editions on/before this date, test after. Never random.
+train_cutoff_date: "2019-01-01"
+
+# Elo is retained ONLY for the reference baseline in Phase 3 — it is not a model feature.
 elo:
   k: 32
   home_advantage: 100
   mov: true          # margin-of-victory adjustment
-
-form:
-  window_n: 10       # last N matches for rolling form
-
-train_cutoff_date: "2024-01-01"
 
 rng:
   seed: 42

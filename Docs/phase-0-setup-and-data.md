@@ -113,5 +113,7 @@ phases too — they read/write Postgres instead of `*.parquet`.
 
 ## Handoff to Phase 1
 A populated `wc2026.matches` table (canonical team names) in Supabase + a loadable config and a
-shared `db.py`/`io.py`. Phase 1 reads `matches` via `read_table` to compute Elo/form/context features
-and writes the `features` table back to the `wc2026` schema.
+shared `db.py`/`io.py`. **Note (strategy pivot):** `matches` is now used only as the **label source**
+for the supervised layer — team strength is built bottom-up from player profiles, not from
+Elo/form on team identity. Phase 1 ingests FIFA + Football Manager player attributes (and caps) into
+new `wc2026` tables. See [the master design](superpowers/specs/2026-06-14-player-profile-pivot-design.md).

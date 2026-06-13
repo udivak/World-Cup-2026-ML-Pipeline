@@ -8,7 +8,8 @@ SCHEMA = "wc2026"
 
 def read_table(name: str) -> pd.DataFrame:
     engine = get_engine()
-    return pd.read_sql_table(name, engine, schema=SCHEMA)
+    with engine.connect() as conn:
+        return pd.read_sql(f"SELECT * FROM {SCHEMA}.{name}", conn)
 
 
 def write_table(df: pd.DataFrame, name: str, if_exists: str = "replace") -> None:

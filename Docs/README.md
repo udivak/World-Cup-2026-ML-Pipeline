@@ -1,23 +1,33 @@
-# Docs — Multi-Stage Soccer Match Prediction System (World Cup 2026)
+# Docs — Player-Profile Soccer Prediction System (World Cup 2026)
 
-Per-phase implementation plans, derived from the approved master design
-(`~/.claude/plans/soccer-team-winning-optimized-kurzweil.md`).
+Per-phase implementation plans, derived from the master design
+[`Docs/superpowers/specs/2026-06-14-player-profile-pivot-design.md`](superpowers/specs/2026-06-14-player-profile-pivot-design.md).
+
+> **Strategy:** team strength is computed **bottom-up from the players in each squad**, never from
+> team identity/history. Historical matches are kept only as **labels**; squad-composition features
+> replace team-identity (Elo) features. See the master design for the full rationale and the leakage
+> rules.
 
 | Phase | Plan | Outcome |
 |------|------|---------|
-| 0 | [Setup & Data](phase-0-setup-and-data.md) | Repo scaffold, config, Kaggle match history loaded + team names canonicalized |
-| 1 | [MVP Backtest (gate)](phase-1-mvp-backtest.md) | Tier-1 features (Elo/form/context) → calibrated models; **beat Elo baseline on RPS/log-loss** |
-| 2 | [Enrichment](phase-2-enrichment.md) | Transfermarkt squad aggregates layered on; measure lift |
-| 3 | [Live WC2026](phase-3-live-wc2026.md) | Predict 2026 fixtures + Monte-Carlo tournament odds |
-| 4 | [Future Extensions](phase-4-future-extensions.md) | YAGNI parking lot: Poisson scores, FastAPI, per-player, injuries |
+| 0 | [Setup & Data](phase-0-setup-and-data.md) · [impl-plan](phase-0-impl-plan.md) | Repo scaffold, Supabase wired, `matches` (labels) loaded + team names canonicalized. **Done.** |
+| 1 | [Player Profiles](phase-1-player-profiles.md) | FIFA+FM ingestion, player canonicalization, `player_attributes`, caps/appearances |
+| 2 | [Squads & Team Profiles](phase-2-squads-team-profiles.md) | Real rosters (history) + 2026 announced squads → squad assembly (11+15) → `team_profiles` |
+| 3 | [Model & Backtest (gate)](phase-3-model-backtest.md) | Profile-diff features → calibrated models; **GATE: beat the Elo *and* squad-overall baselines on RPS + log-loss** |
+| 4 | [Live WC2026](phase-4-live-wc2026.md) | Assemble 48 squads, predict 104 fixtures + Monte-Carlo tournament odds |
+| 5 | [Future Extensions](phase-5-future-extensions.md) | YAGNI parking lot — raw-attribute model, FM hidden attrs, injuries, Poisson, FastAPI |
 
 ## Core principles carried across all phases
-- **Two-tier features:** Tier-1 (team-level, full history) is the predictive core; Tier-2 (squad
-  aggregates, recent window) is optional enrichment with graceful fallback.
-- **No leakage:** every feature uses only pre-match data; enforced by a dedicated test + strict
-  time-based validation.
-- **RPS is the primary metric** (correct for ordered W/D/L); the success gate is **relative** —
-  beat the Elo-only baseline.
+- **Bottom-up, not team identity:** a team is the aggregate of the players actually in its squad.
+  Elo is kept **only** as a reference baseline to beat — never a feature.
+- **Historical matches are labels, not strength.** The supervised layer learns "squad-quality gap →
+  W/D/L odds" on tournament matches; this generalizes across cycles.
+- **No leakage:** every player attribute/caps snapshot used for a match is dated **before** the
+  match. The roster itself is a legitimate pre-match input. Enforced by a dedicated test +
+  time-based (across-edition) validation — **never a random split**.
+- **RPS is the primary metric**; the gate is **relative** — beat both baselines.
+- **No train/serve skew:** live 2026 prediction reuses the exact `build_features` path.
 - **Free data only; Python + scikit-learn.**
 
-Start with Phase 0. Each phase lists its own Definition of Done and hands off to the next.
+Phase 3 is the success gate. Phases 1–2 (data) are upstream of it; a FIFA-only thin-slice proof in
+Phase 3 de-risks the full FIFA+FM merge.

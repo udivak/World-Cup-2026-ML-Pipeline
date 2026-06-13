@@ -329,5 +329,7 @@ All exit criteria from `phase-0-setup-and-data.md`:
 ## Handoff to Phase 1
 
 Populated `wc2026.matches` (canonical names) + loadable `config.yaml` + working `db.py`/`io.py`.
-Phase 1 reads `matches` via `read_table` to compute Elo/form/context features and writes
-`wc2026.features` back to the same schema.
+**Strategy pivot:** `matches` is now the **label source** only; the predictive signal is built
+bottom-up from player profiles (FIFA + Football Manager), not Elo/form on team identity. Phase 1
+ingests player attributes + caps into new `wc2026` tables. See `Docs/README.md` and the master
+design at `Docs/superpowers/specs/2026-06-14-player-profile-pivot-design.md`.
