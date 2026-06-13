@@ -20,8 +20,12 @@ breaks. We characterize a team by *who is actually in the squad*.
 **Stack:** Python + scikit-learn, pandas/numpy, SQLAlchemy → Supabase Postgres. Free data only.
 No deep learning, no paid APIs.
 
-**Status:** Phase 0 (scaffold + `matches` + canonicalization + Supabase) is **done**. The project has
-pivoted from team-identity (Elo/form) features to player-profile features; Phases 1+ implement that.
+**Status:** Phase 0 (scaffold + `matches` + canonicalization + Supabase) is **done**. Phase 1
+(player profiles) is **implemented**: FIFA editions 2018/2020/2022 ingested into
+`wc2026.player_attributes` (33,337 canonical players, ~55.5k attribute rows, full attribute long tail
+in `attrs JSONB`), player canonicalization on `(normalized_name, birthdate, nationality)`, plus FM/caps
+loaders that degrade gracefully until exports are dropped into `data/raw/{fm,caps}/`. The project
+pivoted from team-identity (Elo/form) features to player-profile features; Phases 2+ build on this.
 
 ## Phases (build in order; each has a gate)
 
@@ -133,5 +137,7 @@ pytest tests/                   # fixture-backed; DB tests skip without DATABASE
 python -m src.collect.matches_loader   # download + load match labels (Phase 0, done)
 python -m src.collect.fifa_loader      # ingest FIFA/EA FC player attributes (Phase 1)
 python -m src.collect.fm_loader        # ingest Football Manager attributes  (Phase 1)
+python -m src.collect.caps_loader      # ingest caps / tournament appearances (Phase 1)
+python -m src.collect.players_loader   # Phase 1 orchestrator: FIFA→FM→caps + sanity summary
 python -m src.aggregate.team_profile   # build team profiles from squads     (Phase 2)
 ```

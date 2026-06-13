@@ -25,6 +25,34 @@ class RngConfig:
 
 
 @dataclass
+class FifaConfig:
+    seasons: list[int] = field(default_factory=lambda: [2010, 2026])
+    raw_subdir: str = "fifa"
+
+
+@dataclass
+class SourceDirConfig:
+    raw_subdir: str = ""
+
+
+@dataclass
+class PlayerDataConfig:
+    fifa: FifaConfig = field(default_factory=FifaConfig)
+    fm: SourceDirConfig = field(default_factory=lambda: SourceDirConfig("fm"))
+    caps: SourceDirConfig = field(default_factory=lambda: SourceDirConfig("caps"))
+
+
+@dataclass
+class SquadConfig:
+    size: int = 26
+    starting_xi: int = 11
+    substitutes: int = 15
+    formation: dict[str, int] = field(
+        default_factory=lambda: {"gk": 1, "def": 4, "mid": 3, "att": 3}
+    )
+
+
+@dataclass
 class Config:
     db_schema: str = "wc2026"
     elo: EloConfig = field(default_factory=EloConfig)
@@ -32,12 +60,22 @@ class Config:
     train_cutoff_date: str = "2024-01-01"
     rng: RngConfig = field(default_factory=RngConfig)
     raw_data_dir: str = "data/raw"
+    player_data: PlayerDataConfig = field(default_factory=PlayerDataConfig)
+    squad: SquadConfig = field(default_factory=SquadConfig)
+    tournaments: list[str] = field(default_factory=list)
 
 
 def load_config(path: Path | None = None) -> Config:
     config_path = path or REPO_ROOT / "config.yaml"
     with open(config_path) as f:
         raw: dict[str, Any] = yaml.safe_load(f)
+
+    pd_raw = raw.get("player_data", {})
+    player_data = PlayerDataConfig(
+        fifa=FifaConfig(**pd_raw.get("fifa", {})),
+        fm=SourceDirConfig(**pd_raw.get("fm", {"raw_subdir": "fm"})),
+        caps=SourceDirConfig(**pd_raw.get("caps", {"raw_subdir": "caps"})),
+    )
 
     return Config(
         db_schema=raw.get("db_schema", "wc2026"),
@@ -46,6 +84,9 @@ def load_config(path: Path | None = None) -> Config:
         train_cutoff_date=raw.get("train_cutoff_date", "2024-01-01"),
         rng=RngConfig(**raw.get("rng", {})),
         raw_data_dir=raw.get("raw_data_dir", "data/raw"),
+        player_data=player_data,
+        squad=SquadConfig(**raw.get("squad", {})),
+        tournaments=raw.get("tournaments", []),
     )
 
 
@@ -57,3 +98,6 @@ if __name__ == "__main__":
     print(f"train_cutoff_date: {cfg.train_cutoff_date}")
     print(f"rng.seed: {cfg.rng.seed}")
     print(f"raw_data_dir: {cfg.raw_data_dir}")
+    print(f"fifa.seasons: {cfg.player_data.fifa.seasons}, fifa.raw_subdir: {cfg.player_data.fifa.raw_subdir}")
+    print(f"squad: {cfg.squad.size} = {cfg.squad.starting_xi} + {cfg.squad.substitutes}, formation: {cfg.squad.formation}")
+    print(f"tournaments: {len(cfg.tournaments)} configured")
