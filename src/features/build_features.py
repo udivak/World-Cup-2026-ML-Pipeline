@@ -32,10 +32,23 @@ PROFILE_DIFF_COLS = [
     "gk_strength", "def_strength", "mid_strength", "att_strength", "overall_xi",
     "star_power", "depth", "total_caps", "mean_age", "total_value", "avg_value",
     "top5_league_share", "mean_composure",
+    # Phase 3 enrichment — top-end-talent signals surfaced from FIFA attrs:
+    "mean_intl_rep", "elite_count", "mean_potential",
 ]
 
-# The full feature vector the models consume (single source of truth for train + serve).
+# All diff columns stored in match_features (data artifact; "ingest wide").
 FEATURE_COLUMNS = [f"diff_{c}" for c in PROFILE_DIFF_COLS] + ["home_adv", "cross_conf"]
+
+# The models consume a parsimonious subset ("select narrow"; the spec calls for a parsimonious
+# profile + regularization). One clean signal per concept — squad quality, ceiling, global stature,
+# world-class depth, top-end, bench, mentality, + context — dropping the NaN-heavy unit strengths
+# (redundant with overall_xi), the coverage-biased raw sums (total_value/total_caps), and features
+# redundant with those kept (avg_value, top5_league_share, mean_age). Chosen on these a-priori
+# grounds, NOT by tuning on the held-out backtest.
+MODEL_FEATURES = [
+    "diff_overall_xi", "diff_mean_potential", "diff_mean_intl_rep", "diff_elite_count",
+    "diff_star_power", "diff_depth", "diff_mean_composure", "home_adv", "cross_conf",
+]
 
 # Identity + label columns carried alongside the features.
 ID_COLUMNS = ["date", "tournament", "edition_year", "home_team", "away_team", "neutral", "result"]

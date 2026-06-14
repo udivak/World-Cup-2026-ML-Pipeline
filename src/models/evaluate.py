@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from src.common.config import load_config
-from src.features.build_features import FEATURE_COLUMNS, build_feature_frame
+from src.features.build_features import MODEL_FEATURES, build_feature_frame
 from src.models.baselines import (
     ELO_FEATURES,
     SQUAD_OVERALL_FEATURES,
@@ -89,10 +89,10 @@ def _fold_probabilities(train: pd.DataFrame, test: pd.DataFrame) -> dict:
             test[SQUAD_OVERALL_FEATURES],
         ),
         "LogReg profile": fit_predict_proba(
-            build_logreg(calibrated=True), train[FEATURE_COLUMNS], y_tr, test[FEATURE_COLUMNS]
+            build_logreg(calibrated=True), train[MODEL_FEATURES], y_tr, test[MODEL_FEATURES]
         ),
         "HGB profile": fit_predict_proba(
-            build_hgb(calibrated=True), train[FEATURE_COLUMNS], y_tr, test[FEATURE_COLUMNS]
+            build_hgb(calibrated=True), train[MODEL_FEATURES], y_tr, test[MODEL_FEATURES]
         ),
     }
     proba["Ensemble"] = (proba["LogReg profile"] + proba["HGB profile"]) / 2.0
@@ -198,8 +198,8 @@ def profile_importances(feats: pd.DataFrame, cutoff: str = "2023-01-01", n_repea
 
     cut = pd.Timestamp(cutoff)
     train, test = feats[feats["date"] < cut], feats[feats["date"] >= cut]
-    X_tr, y_tr = train[FEATURE_COLUMNS], train["result"]
-    X_te, y_te = test[FEATURE_COLUMNS], test["result"]
+    X_tr, y_tr = train[MODEL_FEATURES], train["result"]
+    X_te, y_te = test[MODEL_FEATURES], test["result"]
 
     model = build_logreg(calibrated=True)
     model.fit(X_tr, y_tr)
@@ -218,7 +218,7 @@ def profile_importances(feats: pd.DataFrame, cutoff: str = "2023-01-01", n_repea
     coef_home = plain.named_steps["lr"].coef_[list(plain.named_steps["lr"].classes_).index("H")]
 
     return pd.DataFrame({
-        "feature": FEATURE_COLUMNS,
+        "feature": MODEL_FEATURES,
         "perm_importance_rps": imp.importances_mean,
         "logit_coef_team1_win": coef_home,
     }).sort_values("perm_importance_rps", ascending=False).reset_index(drop=True)

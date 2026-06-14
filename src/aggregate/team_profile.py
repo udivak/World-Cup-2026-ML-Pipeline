@@ -96,8 +96,9 @@ def _load_attribute_index() -> tuple[dict[int, list], list[int]]:
     from src.common.db import get_engine
 
     sql = text(
-        "SELECT player_id, season_year, overall, value, league, age, positions,"
-        " attrs->>'mentality_composure' AS composure"
+        "SELECT player_id, season_year, overall, potential, value, league, age, positions,"
+        " attrs->>'mentality_composure' AS composure,"
+        " attrs->>'international_reputation' AS reputation"
         " FROM wc2026.player_attributes WHERE source = 'fifa'"
     )
     engine = get_engine()
@@ -145,7 +146,11 @@ def build_profile_row(
         rec = _nearest_prior(attr_index.get(pid), target) if pid is not None else None
         overall = rec["overall"] if rec else None
         position = (rec["positions"] if rec and rec.get("positions") else r.get("position"))
-        squad_players.append({"player_id": pid, "overall": overall, "position": position})
+        squad_players.append({
+            "player_id": pid, "overall": overall, "position": position,
+            "reputation": _to_float(rec.get("reputation")) if rec else None,
+            "potential": _to_float(rec.get("potential")) if rec else None,
+        })
         if rec is not None:
             matched += 1
             editions_used.append(int(rec["season_year"]))
@@ -169,6 +174,14 @@ def build_profile_row(
     unit_strength = {
         u: _mean([p["overall"] for p in squad["by_unit"][u]]) for u in UNITS
     }
+    # Top-end-talent signals (orthogonal to the compressed `overall`): the XI's mean global
+    # stature / ceiling, and the count of genuine world-class players (reputation >= 4) in the squad.
+    mean_intl_rep = _mean([p.get("reputation") for p in squad["xi"]])
+    mean_potential = _mean([p.get("potential") for p in squad["xi"]])
+    elite_count = sum(
+        1 for p in squad_players
+        if p.get("reputation") is not None and p["reputation"] >= 4
+    )
     total_value = _round(np.nansum([v for v in values if v is not None])) if values else None
     total_caps = _opt_int(np.nansum(
         [c for c in roster["caps"].tolist() if c is not None and c == c]  # noqa: PLR0124
@@ -194,6 +207,9 @@ def build_profile_row(
         "avg_value": _round(total_value / matched) if total_value and matched else None,
         "top5_league_share": _round(np.mean(top5_flags)) if top5_flags else None,
         "mean_composure": _mean(composures),
+        "mean_intl_rep": mean_intl_rep,
+        "elite_count": elite_count,
+        "mean_potential": mean_potential,
         "mean_work_rate": None,       # FM-only; null until FM data is ingested
         "attrs": {
             "editions_used": sorted(set(editions_used)),
@@ -248,7 +264,8 @@ def _write_profiles(rows: list[dict]) -> None:
         "gk_strength", "def_strength", "mid_strength", "att_strength", "overall_xi",
         "star_power", "depth", "total_caps", "total_wc_apps", "total_continental_apps",
         "mean_age", "total_value", "avg_value", "top5_league_share",
-        "mean_composure", "mean_work_rate", "attrs",
+        "mean_composure", "mean_intl_rep", "elite_count", "mean_potential",
+        "mean_work_rate", "attrs",
     ]
     payload = [
         {

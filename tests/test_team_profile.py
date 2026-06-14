@@ -94,6 +94,31 @@ def test_build_profile_row_aggregates_and_respects_no_leakage():
     assert profile["mean_composure"] == 75.0
 
 
+def test_build_profile_row_aggregates_reputation_and_potential():
+    # Enrichment: mean intl-reputation / potential over the XI, and the count of world-class
+    # players (international_reputation >= 4) in the squad.
+    attr_index = {
+        1: [{"season_year": 2018, "overall": 90, "potential": 92, "value": 1_000_000,
+             "league": "X", "age": 28, "positions": "ST", "composure": "80", "reputation": "5"}],
+        2: [{"season_year": 2018, "overall": 84, "potential": 85, "value": 500_000,
+             "league": "Y", "age": 30, "positions": "CB", "composure": "70", "reputation": "4"}],
+        3: [{"season_year": 2018, "overall": 78, "potential": 80, "value": 100_000,
+             "league": "Z", "age": 24, "positions": "GK", "composure": "65", "reputation": "2"}],
+    }
+    roster = pd.DataFrame(
+        [
+            {"player_id": 1, "position": "ST", "dob": "1990-01-01", "caps": 50},
+            {"player_id": 2, "position": "CB", "dob": "1988-01-01", "caps": 40},
+            {"player_id": 3, "position": "GK", "dob": "1994-01-01", "caps": 10},
+        ]
+    )
+    formation = {"gk": 1, "def": 4, "mid": 3, "att": 3}
+    profile = build_profile_row(roster, attr_index, date(2018, 6, 14), formation, substitutes=15)
+    assert profile["elite_count"] == 2          # reputations 5 and 4 are >= 4
+    assert profile["mean_intl_rep"] == 3.67     # mean(5,4,2)
+    assert profile["mean_potential"] == 85.67   # mean(92,85,80)
+
+
 def test_build_profile_row_handles_empty_attributes():
     formation = {"gk": 1, "def": 4, "mid": 3, "att": 3}
     roster = pd.DataFrame(
