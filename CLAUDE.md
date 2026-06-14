@@ -28,10 +28,13 @@ FC26 (EA-ratings schema) are remapped to the sofifa schema by `src/collect/fifa_
 ingest. Player canonicalization keys on `(normalized_name, birthdate, nationality)` with DOB-aware
 token matching that also **merges name-spelling variants of the same player across editions** (FIFA's
 legal name vs FC's common name). FM/caps loaders degrade gracefully. Phase 2 (squads + team profiles)
-is **implemented**: `rosters` scraped from Wikipedia "<event> squads" (2018/2022 WC, Euro 2020, 2026
-WC — 3.4k rows, 64 squads; **~90% matched**, 83% for 2026 newcomers), and 136 `team_profiles`
-aggregated bottom-up (positional unit strengths, star power, depth, experience, age, market value,
-top-5-league share) with strict nearest-prior FIFA joins (2018→FIFA18, Euro2020→FIFA21, 2022→FIFA22,
+is **implemented**: `rosters` scraped from Wikipedia "<event> squads" across **all confederations** —
+FIFA WC (2018/22/26), UEFA Euro (2020/24), Copa América (2019/21/24), Africa Cup of Nations
+(2019/21/23), AFC Asian Cup (2019/23), Gold Cup (2019/21/23/25); 17 editions, **9.6k rows**, ~79%
+matched overall (90%+ for Europe/South America, lower for confederations with players outside FIFA;
+OFC has no public squads page). **382 `team_profiles`** aggregated bottom-up (positional unit strengths,
+star power, depth, experience, age, market value, top-5-league share) with strict nearest-prior FIFA
+joins (2018→FIFA18, Euro2020→FIFA21, 2022→FIFA22,
 2026→FC26 — never a later edition; no leakage). The project pivoted from team-identity (Elo/form)
 features to player-profile features; Phase 3 (model + backtest) builds on `team_profiles`.
 

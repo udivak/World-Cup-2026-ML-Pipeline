@@ -28,15 +28,18 @@ player_data:
 # played in 2021 — start_date reflects the real date, edition_year the brand).
 rosters:
   raw_subdir: rosters
+  # `tournament` matches the wc2026.matches label names (martj42) so Phase 3 can join;
+  # `wiki_page` is the actual Wikipedia "<event> squads" article. edition_year is the
+  # branding year; start_date is the real play date (e.g. AFCON 2021 was played Jan 2022),
+  # which drives nearest-prior FIFA-edition selection. Continental cups are included from
+  # 2019 on (where they overlap the FIFA 2018+ editions); pre-2018 editions are omitted
+  # because no FIFA edition predates them. Sources that 404 / don't parse are skipped.
   sources:
+    # ---- FIFA World Cup ----
     - tournament: "FIFA World Cup"
       edition_year: 2018
       start_date: "2018-06-14"
       wiki_page: "2018 FIFA World Cup squads"
-    - tournament: "UEFA Euro"
-      edition_year: 2020
-      start_date: "2021-06-11"
-      wiki_page: "UEFA Euro 2020 squads"
     - tournament: "FIFA World Cup"
       edition_year: 2022
       start_date: "2022-11-20"
@@ -45,6 +48,75 @@ rosters:
       edition_year: 2026
       start_date: "2026-06-11"
       wiki_page: "2026 FIFA World Cup squads"
+    # ---- UEFA Euro (Europe) ----
+    - tournament: "UEFA Euro"
+      edition_year: 2020
+      start_date: "2021-06-11"
+      wiki_page: "UEFA Euro 2020 squads"
+    - tournament: "UEFA Euro"
+      edition_year: 2024
+      start_date: "2024-06-14"
+      wiki_page: "UEFA Euro 2024 squads"
+    # ---- Copa América (South America, CONMEBOL) ----
+    - tournament: "Copa América"
+      edition_year: 2019
+      start_date: "2019-06-14"
+      wiki_page: "2019 Copa América squads"
+    - tournament: "Copa América"
+      edition_year: 2021
+      start_date: "2021-06-13"
+      wiki_page: "2021 Copa América squads"
+    - tournament: "Copa América"
+      edition_year: 2024
+      start_date: "2024-06-20"
+      wiki_page: "2024 Copa América squads"
+    # ---- African Cup of Nations (Africa, CAF) — Wikipedia: "Africa Cup of Nations" ----
+    - tournament: "African Cup of Nations"
+      edition_year: 2019
+      start_date: "2019-06-21"
+      wiki_page: "2019 Africa Cup of Nations squads"
+    - tournament: "African Cup of Nations"
+      edition_year: 2021
+      start_date: "2022-01-09"
+      wiki_page: "2021 Africa Cup of Nations squads"
+    - tournament: "African Cup of Nations"
+      edition_year: 2023
+      start_date: "2024-01-13"
+      wiki_page: "2023 Africa Cup of Nations squads"
+    # ---- AFC Asian Cup (Asia, AFC) ----
+    - tournament: "AFC Asian Cup"
+      edition_year: 2019
+      start_date: "2019-01-05"
+      wiki_page: "2019 AFC Asian Cup squads"
+    - tournament: "AFC Asian Cup"
+      edition_year: 2023
+      start_date: "2024-01-12"
+      wiki_page: "2023 AFC Asian Cup squads"
+    # ---- Gold Cup (North/Central America & Caribbean, CONCACAF) ----
+    - tournament: "Gold Cup"
+      edition_year: 2019
+      start_date: "2019-06-15"
+      wiki_page: "2019 CONCACAF Gold Cup squads"
+    - tournament: "Gold Cup"
+      edition_year: 2021
+      start_date: "2021-07-10"
+      wiki_page: "2021 CONCACAF Gold Cup squads"
+    - tournament: "Gold Cup"
+      edition_year: 2023
+      start_date: "2023-06-24"
+      wiki_page: "2023 CONCACAF Gold Cup squads"
+    - tournament: "Gold Cup"
+      edition_year: 2025
+      start_date: "2025-06-14"
+      wiki_page: "2025 CONCACAF Gold Cup squads"
+    # ---- Oceania Nations Cup (Oceania, OFC) ----
+    # No public "squads" article exists (OFC doesn't publish full squad tables on Wikipedia),
+    # so this 404s and is skipped at runtime — kept as a placeholder for when one appears.
+    # OFC players are also virtually absent from FIFA, so coverage would be ~0 regardless.
+    - tournament: "Oceania Nations Cup"
+      edition_year: 2024
+      start_date: "2024-06-15"
+      wiki_page: "2024 OFC Nations Cup squads"
 
 # Tournaments that count as "major tournament" matches for the supervised label subset.
 tournaments:
