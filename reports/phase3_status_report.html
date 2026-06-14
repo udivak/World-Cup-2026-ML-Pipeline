@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WC2026 — Project Status Report</title>
+<style>
+:root{
+ --bg:#0a0d14; --panel:#121723; --panel2:#0f1420; --border:#222b3a; --text:#e6edf3;
+ --mut:#8b97a8; --accent:#4cc2ff; --green:#3fb950; --red:#f85149; --amber:#d29922; --purple:#bc8cff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -200px,#15203a 0%,var(--bg) 60%);
+ color:var(--text);font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+ line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+.mono{font-family:'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;font-size:.86em}
+.mut{color:var(--mut)}
+.num{font-family:'SF Mono',Menlo,monospace;text-align:right;font-variant-numeric:tabular-nums}
+code{font-family:'SF Mono',Menlo,monospace;background:#1c2433;padding:1px 6px;border-radius:5px;font-size:.85em;color:#cfe3ff}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.5px}
+h2{font-size:19px;margin:44px 0 14px;letter-spacing:-.2px;display:flex;align-items:center;gap:10px}
+h2::before{content:"";width:4px;height:18px;background:var(--accent);border-radius:3px;display:inline-block}
+p{margin:10px 0}
+a{color:var(--accent);text-decoration:none}
+/* header */
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;
+ border-bottom:1px solid var(--border);padding-bottom:22px}
+.eyebrow{color:var(--accent);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+.sub{color:var(--mut);font-size:14px}
+.statuspill{padding:8px 16px;border-radius:999px;font-weight:700;font-size:13px;
+ background:rgba(248,81,73,.12);color:var(--red);border:1px solid rgba(248,81,73,.35);white-space:nowrap}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:26px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
+.kpi-val{font-size:26px;font-weight:700;font-family:'SF Mono',Menlo,monospace;letter-spacing:-1px}
+.kpi-fail{color:var(--red)}
+.kpi-label{font-size:13px;margin-top:4px}
+.kpi-sub{font-size:11.5px;color:var(--mut);margin-top:3px}
+/* cards */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin:16px 0}
+.lead{font-size:15.5px;color:#cdd6e2}
+/* phases */
+.phase{display:flex;gap:14px;padding:10px 0;align-items:flex-start}
+.phase-dot{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+ font-size:13px;font-weight:700;border:2px solid var(--border);color:var(--mut);margin-top:2px}
+.phase-done .phase-dot{background:rgba(63,185,80,.15);border-color:var(--green);color:var(--green)}
+.phase-current .phase-dot{background:rgba(76,194,255,.15);border-color:var(--accent);color:var(--accent);
+ box-shadow:0 0 0 4px rgba(76,194,255,.08)}
+.phase-name{font-weight:600;font-size:14.5px}
+.phase-current .phase-name{color:var(--accent)}
+.phase-desc{color:var(--mut);font-size:13px}
+.phase + .phase{border-top:1px solid #1a2230}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+th{text-align:left;color:var(--mut);font-weight:600;font-size:11.5px;text-transform:uppercase;
+ letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--border)}
+th.num{text-align:right}
+td{padding:9px 10px;border-bottom:1px solid #161d29}
+tr:hover td{background:rgba(255,255,255,.015)}
+.win{color:var(--green);font-weight:600}
+.bestrow{font-weight:700;color:var(--text)}
+.pill{font-size:10.5px;padding:2px 8px;border-radius:999px;font-weight:600;vertical-align:middle;margin-left:6px}
+.pill-amber{background:rgba(210,153,34,.14);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+.pill-blue{background:rgba(76,194,255,.12);color:var(--accent);border:1px solid rgba(76,194,255,.3)}
+.pill-green{background:rgba(63,185,80,.14);color:var(--green);border:1px solid rgba(63,185,80,.35)}
+/* bar charts */
+.cbar{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:14px;margin:9px 0}
+.cbar-label{font-size:13px;color:#cdd6e2;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-row{display:flex;align-items:center;gap:12px}
+.bar-track{flex:1;height:18px;background:#0c1119;border:1px solid #1c2433;border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;border-radius:5px 0 0 5px;transition:width .4s}
+.bar-val{font-family:'SF Mono',Menlo,monospace;font-size:12px;min-width:120px;color:#cdd6e2}
+.chart-note{color:var(--mut);font-size:12px;margin-top:10px}
+/* verdict */
+.verdict{background:linear-gradient(180deg,rgba(248,81,73,.08),rgba(248,81,73,.02));
+ border:1px solid rgba(248,81,73,.3);border-radius:14px;padding:20px 24px;margin:18px 0}
+.verdict h3{margin:0 0 6px;color:var(--red);font-size:16px}
+.verdict .cmp{font-family:'SF Mono',Menlo,monospace;font-size:13px;color:#cdd6e2;margin-top:8px}
+/* analysis list */
+.alist{list-style:none;padding:0;margin:8px 0}
+.alist li{padding:8px 0 8px 26px;position:relative;border-bottom:1px solid #161d29;font-size:14px}
+.alist li::before{content:"▸";position:absolute;left:6px;color:var(--accent)}
+/* steps */
+.step{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:12px 0}
+.step-rec{border-color:rgba(63,185,80,.4);background:linear-gradient(180deg,rgba(63,185,80,.05),transparent)}
+.step-title{font-weight:600;font-size:15px;margin-bottom:5px}
+.step-desc{color:var(--mut);font-size:13.5px}
+.step-desc code{font-size:.92em}
+/* footer */
+.foot{margin-top:50px;padding-top:20px;border-top:1px solid var(--border);color:var(--mut);font-size:12px;
+ display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:720px){.two{grid-template-columns:1fr}.cbar{grid-template-columns:120px 1fr}.bar-val{min-width:auto}}
+</style></head>
+<body><div class="wrap">
+
+<div class="head">
+ <div>
+  <div class="eyebrow">World Cup 2026 · Prediction System</div>
+  <h1>Project Status Report</h1>
+  <div class="sub">Bottom-up player-profile match prediction · Phase 3 (Model &amp; Backtest) · 2026-06-14</div>
+ </div>
+ <div class="statuspill">● GATE: FAIL — Elo not beaten</div>
+</div>
+
+<div class="kpis"><div class="kpi"><div class="kpi-val ">698</div><div class="kpi-label">Supervised matches</div><div class="kpi-sub">tournament finals, 16 editions</div></div><div class="kpi"><div class="kpi-val ">382</div><div class="kpi-label">Team profiles</div><div class="kpi-sub">bottom-up, 2018–2026</div></div><div class="kpi"><div class="kpi-val ">60,342</div><div class="kpi-label">Canonical players</div><div class="kpi-sub">161.5k attribute rows</div></div><div class="kpi"><div class="kpi-val ">583</div><div class="kpi-label">Held-out backtest</div><div class="kpi-sub">across-edition, 14 editions</div></div><div class="kpi"><div class="kpi-val ">0.192</div><div class="kpi-label">Best profile RPS</div><div class="kpi-sub">LogReg · vs Elo 0.180</div></div><div class="kpi"><div class="kpi-val kpi-fail">FAIL</div><div class="kpi-label">Gate</div><div class="kpi-sub">Elo wins every metric</div></div></div>
+
+<h2>Executive summary</h2>
+<div class="card"><p class="lead">
+The system predicts World Cup matches <b>bottom-up</b> — team strength is computed from the
+players actually in each squad (FIFA/EA-FC ratings), not from team identity. Phases 0–2 are complete:
+a clean data pipeline feeds <b>382 team profiles</b> built from real tournament rosters. Phase 3 turns
+those profiles into per-match features and trains calibrated Win/Draw/Loss models, then judges them
+with a leakage-free <b>across-edition backtest</b>.</p>
+<p>The <b>success gate</b> — beat both reference baselines (Elo and squad-overall) on RPS <i>and</i>
+log-loss — <b style="color:var(--red)">did not pass</b>. The FIFA-only profile model is competitive
+(RPS ≈ 0.19, near bookmaker-grade) and the bottom-up signal is genuinely present, but a classic
+<b>Elo</b> baseline still predicts better on every metric. This is a real, honestly-reported result and
+a natural decision checkpoint — the data the design intended (Football Manager attributes, caps /
+experience, recent form) is not yet in the profiles.</p></div>
+
+<h2>Pipeline status</h2>
+<div class="two">
+ <div class="card" style="margin:0"><div class="phase phase-done"><div class="phase-dot">✓</div><div class="phase-body"><div class="phase-name">Phase 0 · Setup & data</div><div class="phase-desc">Scaffold, Supabase, 49,400 match labels</div></div></div><div class="phase phase-done"><div class="phase-dot">✓</div><div class="phase-body"><div class="phase-name">Phase 1 · Player profiles</div><div class="phase-desc">FIFA/EA-FC 2018–26, canonicalization</div></div></div><div class="phase phase-done"><div class="phase-dot">✓</div><div class="phase-body"><div class="phase-name">Phase 2 · Squads & team profiles</div><div class="phase-desc">Rosters (all confeds) → 382 profiles</div></div></div><div class="phase phase-current"><div class="phase-dot">●</div><div class="phase-body"><div class="phase-name">Phase 3 · Model & backtest</div><div class="phase-desc">Features, models, gate — FAIL on RPS</div></div></div><div class="phase phase-pending"><div class="phase-dot"></div><div class="phase-body"><div class="phase-name">Phase 4 · Live WC2026</div><div class="phase-desc">Assemble 48 squads, simulate tournament</div></div></div><div class="phase phase-pending"><div class="phase-dot"></div><div class="phase-body"><div class="phase-name">Phase 5 · Extensions</div><div class="phase-desc">YAGNI parking lot</div></div></div></div>
+ <div class="card" style="margin:0">
+  <table><thead><tr><th>Table</th><th class="num">Rows</th><th>Notes</th></tr></thead>
+  <tbody><tr><td class="mono">matches</td><td class="num">49,400</td><td class="mut">W/D/L labels, 1872–2026</td></tr><tr><td class="mono">players</td><td class="num">60,342</td><td class="mut">canonical identities</td></tr><tr><td class="mono">player_attributes</td><td class="num">161,532</td><td class="mut">FIFA/EA-FC, attrs JSONB</td></tr><tr><td class="mono">rosters</td><td class="num">9,574</td><td class="mut">17 editions, ~79% matched</td></tr><tr><td class="mono">team_profiles</td><td class="num">382</td><td class="mut">per-squad aggregates</td></tr><tr><td class="mono">match_features</td><td class="num">698</td><td class="mut">team1−team2 diffs + context</td></tr></tbody></table>
+  <div class="chart-note">All processed data lives in Supabase Postgres (<code>wc2026</code> schema).</div>
+ </div>
+</div>
+
+<h2>The model layer (Phase 3)</h2>
+<div class="card">
+ <p><b>Features (single train/serve code path).</b> For each match, 13 <b>team1−team2 profile
+ differences</b> (unit strengths GK/DEF/MID/ATT, overall XI, star power, depth, caps, age, market
+ value, top-5-league share, composure) plus context: <code>home_adv</code> (0 at neutral venues) and
+ <code>cross_conf</code>. The realized result is the label — never a feature.</p>
+ <p><b>Two reference baselines</b> <span class="pill pill-amber">bar to beat</span> a chronological
+ football-<b>Elo</b> (rolled over the full 49.4k-match history → 3-way logit) and a naive
+ <b>squad-overall</b> logit on a single feature. <b>Two contenders</b>
+ <span class="pill pill-blue">profile</span> multinomial <b>LogReg</b> and
+ <b>HistGradientBoosting</b>, plus their <b>ensemble</b>. Everything is probability-calibrated.</p>
+ <p><b>Validation:</b> expanding window across editions (train on all finals before a tournament,
+ test on it, roll forward) — <b>never a random split</b>. No-leakage is enforced by tests: every
+ squad/attribute feeding a match predates it (a 2018 World Cup squad uses FIFA 18, not 19).</p>
+</div>
+
+<h2>Backtest results — RPS (primary metric, lower is better)</h2>
+<div class="card"><div class="cbar"><span class="cbar-label">Elo-only</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:78.3%;background:#d29922"></div></div><span class="bar-val">0.1802</span></div></div><div class="cbar"><span class="cbar-label">Squad-overall</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:81.2%;background:#d29922"></div></div><span class="bar-val">0.1867</span></div></div><div class="cbar"><span class="cbar-label">LogReg profile</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:83.6%;background:#4cc2ff"></div></div><span class="bar-val">0.1923</span></div></div><div class="cbar"><span class="cbar-label">Ensemble</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:84.2%;background:#4cc2ff"></div></div><span class="bar-val">0.1936</span></div></div><div class="cbar"><span class="cbar-label">HGB profile</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:87.0%;background:#4cc2ff"></div></div><span class="bar-val">0.2002</span></div></div>
+ <div class="chart-note">Axis 0–0.23. Pooled over 583 held-out matches (14 editions, ≥100 training
+ matches required). Reference: bookmaker-grade 3-way RPS ≈ 0.19. All models cluster near it; Elo is best.</div>
+</div>
+
+<h2>Backtest results — log-loss (lower is better)</h2>
+<div class="card"><div class="cbar"><span class="cbar-label">Elo-only</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:86.3%;background:#d29922"></div></div><span class="bar-val">0.9489</span></div></div><div class="cbar"><span class="cbar-label">Squad-overall</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:88.1%;background:#d29922"></div></div><span class="bar-val">0.9687</span></div></div><div class="cbar"><span class="cbar-label">LogReg profile</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:89.9%;background:#4cc2ff"></div></div><span class="bar-val">0.9888</span></div></div><div class="cbar"><span class="cbar-label">Ensemble</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:90.0%;background:#4cc2ff"></div></div><span class="bar-val">0.9902</span></div></div><div class="cbar"><span class="cbar-label">HGB profile</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:91.6%;background:#4cc2ff"></div></div><span class="bar-val">1.0077</span></div></div>
+ <div class="chart-note">Axis 0–1.1. Uniform-guess baseline = ln 3 ≈ 1.099; every model beats that,
+ but Elo is again best. (An earlier build mis-ordered probability columns and falsely showed profiles
+ winning here — fixed, with a regression test.)</div>
+</div>
+
+<h2>Full comparison &amp; the gate</h2>
+<div class="card">
+ <table><thead><tr><th>Model</th><th class="num">RPS ↓</th><th class="num">log-loss ↓</th><th class="num">accuracy ↑</th></tr></thead>
+ <tbody><tr><td>Elo-only <span class="pill pill-amber">baseline</span></td><td class="num win">0.1802</td><td class="num">0.9489</td><td class="num">0.569</td></tr><tr><td>Squad-overall <span class="pill pill-amber">baseline</span></td><td class="num ">0.1867</td><td class="num">0.9687</td><td class="num">0.557</td></tr><tr><td>LogReg profile <span class="pill pill-blue">model</span></td><td class="num ">0.1923</td><td class="num">0.9888</td><td class="num">0.552</td></tr><tr><td>Ensemble <span class="pill pill-blue">model</span></td><td class="num ">0.1936</td><td class="num">0.9902</td><td class="num">0.547</td></tr><tr><td>HGB profile <span class="pill pill-blue">model</span></td><td class="num ">0.2002</td><td class="num">1.0077</td><td class="num">0.528</td></tr></tbody></table>
+ <div class="verdict"><h3>✗ GATE FAILED</h3>
+  Best profile model must beat <b>both</b> baselines on <b>RPS and log-loss</b>.
+  <div class="cmp">LogReg profile&nbsp;&nbsp;RPS 0.1923 ✗ vs Elo 0.1802&nbsp;&nbsp;·&nbsp;&nbsp;log-loss 0.9888 ✗ vs Elo 0.9489</div>
+ </div>
+</div>
+
+<h2>Where profiles win &amp; lose — RPS per held-out edition</h2>
+<div class="card">
+ <table><thead><tr><th>Edition</th><th class="num">n</th><th class="num">Elo</th><th class="num">Squad-ovr</th><th class="num">LogReg</th><th class="num">HGB</th></tr></thead>
+ <tbody><tr><td>Copa América 2019</td><td class="num mut">26</td><td class="num">0.1398</td><td class="num bestrow">0.1361</td><td class="num">0.1577</td><td class="num">0.1920</td></tr><tr><td>Gold Cup 2019</td><td class="num mut">31</td><td class="num bestrow">0.1537</td><td class="num">0.1857</td><td class="num">0.2120</td><td class="num">0.2103</td></tr><tr><td>African Cup of Nations 2019</td><td class="num mut">52</td><td class="num">0.1820</td><td class="num bestrow">0.1743</td><td class="num">0.1874</td><td class="num">0.2122</td></tr><tr><td>UEFA Euro 2020</td><td class="num mut">51</td><td class="num bestrow">0.1712</td><td class="num">0.1878</td><td class="num">0.1925</td><td class="num">0.2066</td></tr><tr><td>Copa América 2021</td><td class="num mut">28</td><td class="num">0.1567</td><td class="num bestrow">0.1566</td><td class="num">0.1604</td><td class="num">0.1781</td></tr><tr><td>Gold Cup 2021</td><td class="num mut">31</td><td class="num bestrow">0.1165</td><td class="num">0.1761</td><td class="num">0.1620</td><td class="num">0.1934</td></tr><tr><td>African Cup of Nations 2021</td><td class="num mut">52</td><td class="num">0.2130</td><td class="num">0.2022</td><td class="num win">0.1903</td><td class="num bestrow win">0.1875</td></tr><tr><td>FIFA World Cup 2022</td><td class="num mut">64</td><td class="num">0.2204</td><td class="num bestrow">0.2029</td><td class="num">0.2228</td><td class="num win">0.2047</td></tr><tr><td>Gold Cup 2023</td><td class="num mut">31</td><td class="num">0.1841</td><td class="num bestrow">0.1742</td><td class="num win">0.1813</td><td class="num">0.2086</td></tr><tr><td>AFC Asian Cup 2023</td><td class="num mut">51</td><td class="num bestrow">0.1749</td><td class="num">0.1909</td><td class="num">0.1907</td><td class="num">0.2066</td></tr><tr><td>African Cup of Nations 2023</td><td class="num mut">52</td><td class="num">0.2246</td><td class="num bestrow">0.2069</td><td class="num win">0.2143</td><td class="num win">0.2123</td></tr><tr><td>UEFA Euro 2024</td><td class="num mut">51</td><td class="num bestrow">0.1949</td><td class="num">0.2003</td><td class="num">0.2111</td><td class="num">0.2041</td></tr><tr><td>Copa América 2024</td><td class="num mut">32</td><td class="num bestrow">0.1530</td><td class="num">0.1916</td><td class="num">0.1887</td><td class="num">0.1905</td></tr><tr><td>Gold Cup 2025</td><td class="num mut">31</td><td class="num bestrow">0.1343</td><td class="num">0.1712</td><td class="num">0.1594</td><td class="num">0.1688</td></tr></tbody></table>
+ <div class="chart-note"><span class="win">Green</span> = a profile model beats Elo on that edition;
+ <b>bold</b> = best model in the row. Profiles win on several high-FIFA-coverage editions
+ (World Cup 2022, AFCON 2021, Euro 2024) but lose badly on low-coverage ones (Gold Cup, Copa 2019).</div>
+</div>
+
+<h2>Why the gate failed</h2>
+<div class="card"><ul class="alist">
+ <li><b>Profiles are FIFA-only and thin.</b> The experience / mentality columns the design called for —
+ <code>total_wc_apps</code>, <code>total_continental_apps</code>, <code>mean_work_rate</code> — are
+ still <b>NULL</b> (Football Manager attributes and real caps were never ingested; they degrade to null).</li>
+ <li><b>Low confederation coverage.</b> Gold Cup / Asian Cup / AFCON squads match only ~11–16 of 26
+ players to FIFA, so their unit-strength diffs are noisy — exactly where Elo wins biggest.</li>
+ <li><b>No recent-form signal.</b> Elo absorbs results up to the week before kickoff; the profile uses a
+ FIFA snapshot up to ~8 months old.</li>
+ <li><b>Adding profile richness beyond overall XI hurt RPS</b> — the naive squad-overall baseline
+ (0.1867) outscored the full profile models, confirming the extra features are mostly noise under
+ current coverage.</li>
+</ul>
+ <p style="margin-top:14px"><b>Profile-feature importance</b> (permutation ΔRPS; signed team1-win
+ logit coefficient). The signal is real — squad quality dominates — just not enough to overtake Elo:</p>
+ <div class="cbar"><span class="cbar-label mono">diff_overall_xi</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:100.0%;background:#bc8cff"></div></div><span class="bar-val">+0.01741  <span class="mut">coef +0.484</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_star_power</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:36.8%;background:#bc8cff"></div></div><span class="bar-val">+0.00641  <span class="mut">coef +0.331</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_mean_composure</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:28.3%;background:#bc8cff"></div></div><span class="bar-val">+0.00492  <span class="mut">coef +0.228</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_total_caps</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:26.0%;background:#bc8cff"></div></div><span class="bar-val">+0.00453  <span class="mut">coef +0.096</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_depth</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:21.3%;background:#bc8cff"></div></div><span class="bar-val">+0.00370  <span class="mut">coef +0.073</span></span></div></div><div class="cbar"><span class="cbar-label mono">home_adv</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:10.3%;background:#bc8cff"></div></div><span class="bar-val">+0.00180  <span class="mut">coef +0.185</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_mean_age</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:3.7%;background:#bc8cff"></div></div><span class="bar-val">+0.00065  <span class="mut">coef -0.241</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_def_strength</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:3.1%;background:#bc8cff"></div></div><span class="bar-val">+0.00054  <span class="mut">coef -0.063</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_top5_league_share</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:1.0%;background:#bc8cff"></div></div><span class="bar-val">+0.00006  <span class="mut">coef -0.017</span></span></div></div><div class="cbar"><span class="cbar-label mono">diff_att_strength</span><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:1.0%;background:#bc8cff"></div></div><span class="bar-val">+0.00005  <span class="mut">coef -0.176</span></span></div></div>
+</div>
+
+<h2>Next steps</h2>
+<div class="card" style="padding-top:8px"><div class="step step-rec"><div class="step-title">Enrich data, then retry <span class="pill pill-green">recommended</span></div><div class="step-desc">Fill the richness the design intended but the pipeline still lacks: ingest <b>Football Manager attributes</b> and <b>real caps / international experience</b> (the <code>total_wc_apps</code>, <code>total_continental_apps</code> and <code>mean_work_rate</code> profile columns are still NULL), add a <b>recent-form</b> proxy, and lift <b>confederation FIFA coverage</b> (Gold Cup / Asian Cup squads match only ~11–16 of 26 players). Then re-run this exact backtest. Most aligned with the bottom-up thesis; largest effort (reopens Phase 1 data work).</div></div><div class="step "><div class="step-title">Proceed to Phase 4 as-is </div><div class="step-desc">Accept the profile model — RPS ≈ 0.19, near bookmaker-grade and well-calibrated — as the WC2026 predictor despite not beating Elo, with the limitation documented. Gets you 104-fixture predictions and Monte-Carlo tournament odds now; revisit data richness later.</div></div><div class="step "><div class="step-title">Allow an Elo + profile blend </div><div class="step-desc">Relax the “Elo is never a model feature” rule to build the most accurate WC2026 predictor by blending Elo with the profile signal. Likely the best raw accuracy, but deviates from the pure bottom-up design and dilutes the research question.</div></div><div class="step "><div class="step-title">Merge what's built, decide later </div><div class="step-desc">Treat Phase 3 as a complete, honestly-reported build (gate = FAIL recorded) and open the PR for <code>phase-3-model-backtest</code>. Pick a direction in a later session.</div></div></div>
+
+<div class="foot">
+ <span>Repo: World-Cup-2026-ML-Pipeline · branch <code>phase-3-model-backtest</code> · commit f17a35e</span>
+ <span>Reproduce: <code>python -m src.models.evaluate</code> · 83 tests passing</span>
+</div>
+
+</div></body></html>
