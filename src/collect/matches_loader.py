@@ -119,3 +119,5 @@ if __name__ == "__main__":
     print("Result distribution (%):")
     for label, pct in dist.items():
         print(f"  {label}: {pct}%")
+    # Canonicalize team names and write to wc2026.matches (this is the actual load).
+    load_matches()
