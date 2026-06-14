@@ -20,12 +20,23 @@ breaks. We characterize a team by *who is actually in the squad*.
 **Stack:** Python + scikit-learn, pandas/numpy, SQLAlchemy → Supabase Postgres. Free data only.
 No deep learning, no paid APIs.
 
-**Status:** Phase 0 (scaffold + `matches` + canonicalization + Supabase) is **done**. Phase 1
-(player profiles) is **implemented**: FIFA editions 2018/2020/2022 ingested into
-`wc2026.player_attributes` (33,337 canonical players, ~55.5k attribute rows, full attribute long tail
-in `attrs JSONB`), player canonicalization on `(normalized_name, birthdate, nationality)`, plus FM/caps
-loaders that degrade gracefully until exports are dropped into `data/raw/{fm,caps}/`. The project
-pivoted from team-identity (Elo/form) features to player-profile features; Phases 2+ build on this.
+**Status:** Phase 0 (scaffold + canonicalization + Supabase) is **done**; `wc2026.matches` holds
+**49,400** label rows (1872→2026). Phase 1 (player profiles) is **implemented**: FIFA/EA-FC editions
+**2018, 2019, 2020, 2021, 2022, 2024, 2026** ingested into `wc2026.player_attributes` (**60,342**
+canonical players, **~161.5k** attribute rows, full long tail in `attrs JSONB`). FC24 (multi-patch) and
+FC26 (EA-ratings schema) are remapped to the sofifa schema by `src/collect/fifa_normalize.py` before
+ingest. Player canonicalization keys on `(normalized_name, birthdate, nationality)` with DOB-aware
+token matching that also **merges name-spelling variants of the same player across editions** (FIFA's
+legal name vs FC's common name). FM/caps loaders degrade gracefully. Phase 2 (squads + team profiles)
+is **implemented**: `rosters` scraped from Wikipedia "<event> squads" across **all confederations** —
+FIFA WC (2018/22/26), UEFA Euro (2020/24), Copa América (2019/21/24), Africa Cup of Nations
+(2019/21/23), AFC Asian Cup (2019/23), Gold Cup (2019/21/23/25); 17 editions, **9.6k rows**, ~79%
+matched overall (90%+ for Europe/South America, lower for confederations with players outside FIFA;
+OFC has no public squads page). **382 `team_profiles`** aggregated bottom-up (positional unit strengths,
+star power, depth, experience, age, market value, top-5-league share) with strict nearest-prior FIFA
+joins (2018→FIFA18, Euro2020→FIFA21, 2022→FIFA22,
+2026→FC26 — never a later edition; no leakage). The project pivoted from team-identity (Elo/form)
+features to player-profile features; Phase 3 (model + backtest) builds on `team_profiles`.
 
 ## Phases (build in order; each has a gate)
 
