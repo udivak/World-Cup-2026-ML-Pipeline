@@ -25,6 +25,19 @@ class RngConfig:
 
 
 @dataclass
+class BlendConfig:
+    """Product model (Phase 4 serving): blend of the bottom-up profile model with Elo.
+
+    NOT a gate pass — Elo is never a profile feature. ``combiner``/``weight`` are locked by the
+    Phase-3 blend backtest (``src.models.evaluate``) and only *consumed* by the live serve path.
+    """
+
+    combiner: str = "linear"        # 'linear' (global-weight pool) or 'stacker'
+    weight: float = 0.5             # served global w* (profile share)
+    profile_model: str = "Ensemble" # which profile candidate is pooled with Elo
+
+
+@dataclass
 class FifaConfig:
     seasons: list[int] = field(default_factory=lambda: [2010, 2026])
     raw_subdir: str = "fifa"
@@ -78,6 +91,7 @@ class Config:
     squad: SquadConfig = field(default_factory=SquadConfig)
     rosters: RostersConfig = field(default_factory=RostersConfig)
     tournaments: list[str] = field(default_factory=list)
+    blend: BlendConfig = field(default_factory=BlendConfig)
 
 
 def load_config(path: Path | None = None) -> Config:
@@ -109,6 +123,7 @@ def load_config(path: Path | None = None) -> Config:
         squad=SquadConfig(**raw.get("squad", {})),
         rosters=rosters,
         tournaments=raw.get("tournaments", []),
+        blend=BlendConfig(**raw.get("blend", {})),
     )
 
 
@@ -124,3 +139,4 @@ if __name__ == "__main__":
     print(f"squad: {cfg.squad.size} = {cfg.squad.starting_xi} + {cfg.squad.substitutes}, formation: {cfg.squad.formation}")
     print(f"rosters: {len(cfg.rosters.sources)} sources → {[s.wiki_page for s in cfg.rosters.sources]}")
     print(f"tournaments: {len(cfg.tournaments)} configured")
+    print(f"blend: combiner={cfg.blend.combiner}, weight={cfg.blend.weight}, profile_model={cfg.blend.profile_model}")

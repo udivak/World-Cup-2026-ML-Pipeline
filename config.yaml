@@ -138,6 +138,23 @@ elo:
   home_advantage: 100
   mov: true          # margin-of-victory adjustment
 
+# Product model (Phase 4 serving): blend of the bottom-up profile model with the Elo baseline.
+# NOT a gate pass — Elo is never a profile feature. Weight/combiner are locked by the Phase-3
+# blend backtest (src.models.evaluate) and only consumed by the live serve path (src/predict/).
+#
+# Backtest finding (583 matches, 14 editions): the honest NESTED across-edition blend RPS is 0.1815
+# (linear) — it does NOT beat Elo's 0.1802. Profile and Elo errors are too correlated (RPS-error
+# corr 0.774) for the ambiguity gain to survive out-of-sample weight selection. The pooled LOEO
+# sweep dips just under Elo (0.1796 at w=0.20, beats-Elo band w∈[0.05,0.40]) but that ~1-DoF edge
+# does not transfer to nested. The linear pool is served over the stacker (its 0.0003 nested-RPS
+# edge is noise, below STACKER_MIN_RPS_GAIN). A modest profile share (w=0.20) is retained as a
+# THESIS-motivated product choice — it adds roster-churn-robust talent signal the historical
+# backtest can't reward — NOT because it is shown to beat Elo. See Docs/phase-3-blend-impl-plan.md.
+blend:
+  combiner: linear        # bake-off winner (stacker edge was within noise → serve the robust pool)
+  weight: 0.20            # served global w* = LOEO argmin pooled RPS (profile share)
+  profile_model: Ensemble # which profile candidate is pooled with Elo
+
 rng:
   seed: 42
 

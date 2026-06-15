@@ -35,7 +35,19 @@ from src.models.baselines import (
     build_squad_overall_baseline,
     compute_elo_features,
 )
-from src.models.metrics import CLASSES, per_class_precision_recall, score_all
+from src.models.blend import (
+    blend_weight_sweep,
+    error_correlation,
+    nested_blend_eval,
+    select_weight_loeo,
+)
+from src.models.metrics import (
+    CLASSES,
+    multiclass_log_loss,
+    per_class_precision_recall,
+    ranked_probability_score,
+    score_all,
+)
 from src.models.train import build_hgb, build_logreg, fit_predict_proba
 
 logger = logging.getLogger(__name__)
@@ -45,6 +57,16 @@ MIN_TRAIN_MATCHES = 100
 
 BASELINES = ("Elo-only", "Squad-overall")
 PROFILE_MODELS = ("LogReg profile", "HGB profile", "Ensemble")
+# Product model — served in Phase 4, NEVER a gate pass (uses Elo). Kept separate from PROFILE_MODELS
+# so the gate (which judges bottom-up models only) cannot be satisfied by the blend.
+BLEND_MODEL = "Blend (Elo+profile)"
+PRODUCT_MODELS = (BLEND_MODEL,)
+# RPS-error correlation above this means the two members miss on the same matches — blending can't
+# decorrelate, so it would be ~a no-op (the §5.0 precondition gate).
+MAX_ERROR_CORRELATION = 0.8
+# Adopt the logistic stacker over the global-weight linear pool only if it beats it on nested RPS by
+# at least this much. Below it the difference is noise, and the 1-DoF pool is the more robust serve.
+STACKER_MIN_RPS_GAIN = 0.001
 
 
 def prepare_dataset() -> pd.DataFrame:
@@ -137,10 +159,88 @@ def run_backtest(feats: Optional[pd.DataFrame] = None, min_train: int = MIN_TRAI
     }
 
 
+def report_models(bt: dict) -> list:
+    """All models to show in the comparison: baselines + profile + any attached product model."""
+    return list(bt["models"]) + [m for m in PRODUCT_MODELS if m in bt["P"]]
+
+
+def _build_blend_folds(bt: dict, profile_model: str) -> list:
+    """Per-edition held-out predictions for the nested blend — ``profile`` vs ``Elo-only``.
+
+    Each fold is one tested edition: its row positions in the pooled arrays (``idx``), the two
+    members' out-of-sample probabilities for those rows, the labels, and ``snapshot_date`` as the
+    chronological ``order`` key. Both members are already leakage-free (trained on strictly-prior
+    editions in :func:`run_backtest`).
+    """
+    ed = np.array(bt["edition"])
+    y = np.array(bt["y"])
+    p_profile, p_elo = bt["P"][profile_model], bt["P"]["Elo-only"]
+    order = {r["edition"]: r["snapshot_date"] for _, r in bt["tested_editions"].iterrows()}
+    folds = []
+    for e in bt["tested_editions"].sort_values("snapshot_date")["edition"]:
+        idx = np.where(ed == e)[0]
+        if idx.size == 0:
+            continue
+        folds.append({"edition": e, "order": order[e], "idx": idx,
+                      "p_a": p_profile[idx], "p_b": p_elo[idx], "y": y[idx].tolist()})
+    return folds
+
+
+def evaluate_blend(bt: dict, cfg) -> dict:
+    """Blend the profile model with Elo (product model) and attach the served prediction to ``bt``.
+
+    Runs the §5.0–§5.4 protocol on the already-pooled, leakage-free fold outputs: the error-corr
+    precondition, the LOEO weight sweep + global ``w*``, and the **nested** bake-off between the
+    linear pool and the logistic stacker. The combiner with the lower nested RPS wins; its nested
+    (leakage-free) pooled prediction is stored in ``bt["P"][BLEND_MODEL]`` so it appears as a
+    ``[product]`` row alongside the others. The gate (profile-only) is untouched.
+    """
+    profile_model = cfg.blend.profile_model if cfg.blend.profile_model in bt["P"] else "Ensemble"
+    p_a, p_b, y = bt["P"][profile_model], bt["P"]["Elo-only"], bt["y"]
+
+    corr = error_correlation(p_a, p_b, y)
+    sweep = blend_weight_sweep(p_a, p_b, y)
+    loeo_w = select_weight_loeo(p_a, p_b, y)
+    elo_rps = ranked_probability_score(y, p_b)
+    elo_ll = multiclass_log_loss(y, p_b)
+
+    folds = _build_blend_folds(bt, profile_model)
+    nested_linear = nested_blend_eval(folds, y, combiner="linear")
+    nested_stacker = nested_blend_eval(folds, y, combiner="stacker")
+
+    # Bake-off: default to the simpler, more robust global-weight pool (≈1 DoF). Adopt the stacker
+    # only if it beats the linear pool's nested RPS by a *meaningful* margin — the plan favours the
+    # scalar pool on small N unless the meta-layer clearly earns its extra parameters.
+    chosen = nested_stacker \
+        if (nested_linear["rps"] - nested_stacker["rps"]) > STACKER_MIN_RPS_GAIN else nested_linear
+
+    # Robustness band: the contiguous run of weights (excluding the all-Elo endpoint) whose pooled
+    # RPS beats Elo — the blend should win across a broad band, not a knife-edge.
+    beats = sweep[(sweep["w"] > 0.0) & (sweep["rps"] < elo_rps)]["w"]
+    band = (float(beats.min()), float(beats.max())) if not beats.empty else None
+
+    bt["P"][BLEND_MODEL] = chosen["pred"]
+    return {
+        "profile_model": profile_model,
+        "error_correlation": corr,
+        "precondition_ok": corr < MAX_ERROR_CORRELATION,
+        "sweep": sweep,
+        "loeo_weight": loeo_w,
+        "beats_elo_band": band,
+        "elo_rps": elo_rps,
+        "elo_log_loss": elo_ll,
+        "nested_linear": nested_linear,
+        "nested_stacker": nested_stacker,
+        "chosen_combiner": chosen["combiner"],
+        "chosen_nested": chosen,
+        "beats_elo": bool(chosen["rps"] < elo_rps and chosen["log_loss"] < elo_ll),
+    }
+
+
 def summarize(bt: dict) -> pd.DataFrame:
-    """Pooled metrics per model, sorted by RPS (primary)."""
+    """Pooled metrics per model, sorted by RPS (primary). Includes the product blend if attached."""
     rows = []
-    for m in bt["models"]:
+    for m in report_models(bt):
         s = score_all(bt["y"], bt["P"][m])
         rows.append({"model": m, **{k: s[k] for k in
                     ("rps", "log_loss", "accuracy", "precision_macro", "recall_macro", "n")}})
@@ -157,7 +257,7 @@ def per_edition_rps(bt: dict) -> pd.DataFrame:
     for e in pd.unique(ed):
         mask = ed == e
         row = {"edition": e, "n": int(mask.sum())}
-        for m in bt["models"]:
+        for m in report_models(bt):
             row[m] = round(ranked_probability_score(y[mask].tolist(), bt["P"][m][mask]), 4)
         rows.append(row)
     order = {r["edition"]: i for i, r in bt["tested_editions"].reset_index().iterrows()} \
@@ -224,8 +324,49 @@ def profile_importances(feats: pd.DataFrame, cutoff: str = "2023-01-01", n_repea
     }).sort_values("perm_importance_rps", ascending=False).reset_index(drop=True)
 
 
+def _print_blend_section(blend: dict) -> None:
+    b = blend
+    print("\n------------------- PRODUCT MODEL — Blend (Elo + profile) -------------------")
+    print("(NOT a gate pass: Elo is a blend input. The bottom-up GATE above is the research result.)")
+    print(f"Profile member pooled with Elo : {b['profile_model']}")
+
+    corr = b["error_correlation"]
+    if corr < 0.5:
+        corr_flag = "low — errors decorrelated, blend should help"
+    elif corr < MAX_ERROR_CORRELATION:
+        corr_flag = "ELEVATED — limited decorrelation; nested result is the decider"
+    else:
+        corr_flag = f"HIGH (> {MAX_ERROR_CORRELATION}) — errors move together, blend is ~a no-op"
+    print(f"Precondition  per-match RPS-error corr : {corr:+.3f}  [{corr_flag}]")
+
+    band = b["beats_elo_band"]
+    band_txt = f"w ∈ [{band[0]:.2f}, {band[1]:.2f}]" if band else "none"
+    print(f"LOEO sweep    global w* (profile share) = {b['loeo_weight']:.2f}   "
+          f"beats-Elo band: {band_txt}")
+    sweep = b["sweep"]
+    marks = sweep[np.isclose(sweep["w"] % 0.1, 0.0) | np.isclose(sweep["w"] % 0.1, 0.1)]
+    print("    w     " + " ".join(f"{w:>6.1f}" for w in marks["w"]))
+    print("    RPS   " + " ".join(f"{r:>6.4f}" for r in marks["rps"]))
+
+    nl, ns = b["nested_linear"], b["nested_stacker"]
+    print("Combiner bake-off (nested across-edition; honest out-of-sample):")
+    for name, res in (("linear pool", nl), ("logistic stacker", ns)):
+        win = "  <- chosen" if res["combiner"] == b["chosen_combiner"] else ""
+        print(f"  {name:18s} nested RPS {res['rps']:.4f}   log-loss {res['log_loss']:.4f}{win}")
+
+    cn = b["chosen_nested"]
+    print(f"\nServed blend (nested, {b['chosen_combiner']}):")
+    print(f"  RPS      {cn['rps']:.4f}  vs Elo {b['elo_rps']:.4f}  -> "
+          f"{'beats' if cn['rps'] < b['elo_rps'] else 'DOES NOT beat'}")
+    print(f"  log-loss {cn['log_loss']:.4f}  vs Elo {b['elo_log_loss']:.4f}  -> "
+          f"{'beats' if cn['log_loss'] < b['elo_log_loss'] else 'DOES NOT beat'}")
+    print(f"  PRODUCT: {'beats Elo on RPS and log-loss ✅ (serve the blend in 2026)' if b['beats_elo'] else 'does NOT beat Elo on both metrics'}")
+    print("----------------------------------------------------------------------------")
+
+
 def _print_report(bt: dict, summary: pd.DataFrame, per_ed: pd.DataFrame,
-                  verdict: dict, importances: pd.DataFrame) -> None:
+                  verdict: dict, importances: pd.DataFrame, blend: Optional[dict] = None) -> None:
+    models = report_models(bt)
     print("\n=================== Phase 3 backtest (across-edition expanding window) ===================")
     print(f"Held-out editions: {len(bt['tested_editions'])}   pooled held-out matches: {len(bt['y'])}")
     print(f"(min {MIN_TRAIN_MATCHES} training matches required before an edition is scored)\n")
@@ -233,17 +374,17 @@ def _print_report(bt: dict, summary: pd.DataFrame, per_ed: pd.DataFrame,
     print(f"{'model':22s} {'RPS':>8} {'logloss':>9} {'acc':>7} {'prec':>7} {'recall':>7}")
     print("-" * 66)
     for _, r in summary.iterrows():
-        tag = "  [baseline]" if r["model"] in BASELINES else ""
+        tag = "  [baseline]" if r["model"] in BASELINES else \
+            ("  [product]" if r["model"] in PRODUCT_MODELS else "")
         print(f"{r['model']:22s} {r['rps']:8.4f} {r['log_loss']:9.4f} {r['accuracy']:7.3f} "
               f"{r['precision_macro']:7.3f} {r['recall_macro']:7.3f}{tag}")
 
     print("\nPer-edition RPS (lower is better):")
-    cols = [c for c in per_ed.columns if c not in ("n",)]
-    header = "  " + f"{'edition':28s} {'n':>3} " + " ".join(f"{m[:10]:>10}" for m in bt["models"])
+    header = "  " + f"{'edition':28s} {'n':>3} " + " ".join(f"{m[:10]:>10}" for m in models)
     print(header)
     for _, r in per_ed.iterrows():
         print("  " + f"{r['edition']:28s} {int(r['n']):>3} " +
-              " ".join(f"{r[m]:>10.4f}" for m in bt["models"]))
+              " ".join(f"{r[m]:>10.4f}" for m in models))
 
     print("\n--------------------------------- GATE ---------------------------------")
     v = verdict
@@ -255,6 +396,9 @@ def _print_report(bt: dict, summary: pd.DataFrame, per_ed: pd.DataFrame,
     print(f"\n  GATE: {'PASS ✅  profile model beats both baselines on RPS and log-loss' if v['passed'] else 'FAIL ❌  does not beat both baselines on both metrics'}")
     print("------------------------------------------------------------------------")
 
+    if blend is not None:
+        _print_blend_section(blend)
+
     print("\nProfile-feature importance (permutation ΔRPS on 2023+ hold-out; + signed team1-win logit coef):")
     for _, r in importances.head(10).iterrows():
         print(f"  {r['feature']:24s} ΔRPS={r['perm_importance_rps']:+.5f}  coef={r['logit_coef_team1_win']:+.3f}")
@@ -262,15 +406,19 @@ def _print_report(bt: dict, summary: pd.DataFrame, per_ed: pd.DataFrame,
 
 
 def run_and_report() -> dict:
+    cfg = load_config()
     feats = prepare_dataset()
     bt = run_backtest(feats)
+    # Gate verdict is computed on the PROFILE-ONLY models BEFORE the blend is attached, so the
+    # product blend can never leak into the bottom-up gate.
+    verdict = gate_verdict(summarize(bt))
+    blend = evaluate_blend(bt, cfg)  # attaches BLEND_MODEL to bt["P"]
     summary = summarize(bt)
     per_ed = per_edition_rps(bt)
-    verdict = gate_verdict(summary)
     importances = profile_importances(feats)
-    _print_report(bt, summary, per_ed, verdict, importances)
+    _print_report(bt, summary, per_ed, verdict, importances, blend)
     return {"summary": summary, "per_edition": per_ed, "verdict": verdict,
-            "importances": importances, "backtest": bt}
+            "importances": importances, "backtest": bt, "blend": blend}
 
 
 if __name__ == "__main__":

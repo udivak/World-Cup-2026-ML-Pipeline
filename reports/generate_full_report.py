@@ -14,22 +14,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 warnings.filterwarnings("ignore")
 
+from src.common.config import load_config  # noqa: E402
 from src.features.build_features import FEATURE_COLUMNS, MODEL_FEATURES  # noqa: E402
 from src.models.evaluate import (  # noqa: E402
-    gate_verdict, per_edition_rps, prepare_dataset, profile_importances, run_backtest, summarize,
+    PRODUCT_MODELS, evaluate_blend, gate_verdict, per_edition_rps, prepare_dataset,
+    profile_importances, run_backtest, summarize,
 )
 
 OUT = Path(__file__).resolve().parent / "wc2026_full_report.html"
 
 # ---------------------------------------------------------------- live computation
+cfg = load_config()
 feats = prepare_dataset()
 bt = run_backtest(feats)
-summary = summarize(bt)
+# Gate verdict is computed on the PROFILE-ONLY models, before the product blend is attached, so the
+# blend can never leak into the bottom-up gate.
+verdict = gate_verdict(summarize(bt))
+blend = evaluate_blend(bt, cfg)             # attaches the product "Blend (Elo+profile)" row to bt["P"]
+summary = summarize(bt)                      # now includes the [product] blend row
 per_ed = per_edition_rps(bt)
-verdict = gate_verdict(summary)
 importance = profile_importances(feats)
 
-order = list(summary["model"])
+# Per-edition table shows baselines + profile models only (product blend reported separately).
+order = [m for m in summary["model"] if m not in PRODUCT_MODELS]
 elo = summary[summary.model == "Elo-only"].iloc[0]
 best = summary[summary.model.isin(["LogReg profile", "HGB profile", "Ensemble"])].sort_values("rps").iloc[0]
 n_pooled, n_held = len(bt["y"]), len(bt["tested_editions"])
@@ -81,10 +88,12 @@ SUGGESTIONS = [
      "The enrichment that helped (international reputation, potential) is absent from the loaded FC26 "
      "dataset, so it can't reach live WC2026 scoring. Re-ingesting FC26 from sofifa unlocks the gain "
      "for Phase 4 and lets you test more attributes (face stats, weak foot, work rate proxies)."),
-    ("Ship a blended model for the WC2026 product", "High", "Low", "rec",
-     "Keep the pure bottom-up model as the research artifact (the gate), but for the actual 2026 "
-     "predictor combine it with Elo. Elo's recent-form edge + the squad-talent signal is the best of "
-     "both; report the pure model honestly and serve the blend. Resolves the form gap pragmatically."),
+    ("Add a recent-form / cohesion signal (the real lever for a winning blend)", "High", "Medium", "rec",
+     "The Elo+profile blend is now built and back-tested (see Performance → Product model) — and it does "
+     "NOT beat Elo on the honest nested metric (0.1815 vs 0.1802), because the two models' errors are too "
+     "correlated (0.774): re-weighting the same signal can't help. The way to actually beat Elo is to add "
+     "the ingredient it has and the profile lacks — recent form / momentum / squad cohesion — as a real "
+     "feature. A modest w=0.20 blend is served meanwhile on thesis grounds, not as a proven win."),
     ("Improve confederation coverage", "Medium", "Medium", "",
      "Gold Cup / Asian Cup / AFCON squads match only ~11–16/26 players to FIFA — the exact editions "
      "Elo wins. Better player canonicalization (or an alternate ratings source for these leagues) "
@@ -111,7 +120,8 @@ CMOD, CBASE, CGOOD, CPURP, CRED = "#4cc2ff", "#d29922", "#3fb950", "#bc8cff", "#
 
 rps_rows = ll_rows = ""
 for _, r in summary.iterrows():
-    c = CBASE if r["model"] in ("Elo-only", "Squad-overall") else CMOD
+    c = CBASE if r["model"] in ("Elo-only", "Squad-overall") else \
+        (CPURP if r["model"] in PRODUCT_MODELS else CMOD)
     rps_rows += f'<div class="cbar"><span class="cbar-label">{r["model"]}</span>{bar(r["rps"],0.23,c,f"{r["rps"]:.4f}")}</div>'
     ll_rows += f'<div class="cbar"><span class="cbar-label">{r["model"]}</span>{bar(r["log_loss"],1.05,c,f"{r["log_loss"]:.4f}")}</div>'
 
@@ -124,8 +134,13 @@ for _, r in importance.iterrows():
 mt = ""
 bestrps = summary["rps"].min()
 for _, r in summary.iterrows():
-    kind = "baseline" if r["model"] in ("Elo-only", "Squad-overall") else "model"
-    tag = f'<span class="pill {"pill-amber" if kind=="baseline" else "pill-blue"}">{kind}</span>'
+    if r["model"] in ("Elo-only", "Squad-overall"):
+        kind, pill = "baseline", "pill-amber"
+    elif r["model"] in PRODUCT_MODELS:
+        kind, pill = "product", "pill-purp"
+    else:
+        kind, pill = "model", "pill-blue"
+    tag = f'<span class="pill {pill}">{kind}</span>'
     cls = "num win" if r["rps"] == bestrps else "num"
     mt += f'<tr><td>{r["model"]} {tag}</td><td class="{cls}">{r["rps"]:.4f}</td><td class="num">{r["log_loss"]:.4f}</td><td class="num">{r["accuracy"]:.3f}</td><td class="num mut">{r["precision_macro"]:.3f}/{r["recall_macro"]:.3f}</td></tr>'
 
@@ -138,6 +153,61 @@ for _, r in per_ed.iterrows():
         cls = "num" + (" bestrow" if vals[m] == bestrow else "") + (" win" if (m in ("LogReg profile", "HGB profile") and vals[m] < elov) else "")
         cells += f'<td class="{cls}">{vals[m]:.4f}</td>'
     pe += f'<tr><td>{r["edition"]}</td><td class="num mut">{int(r["n"])}</td>{cells}</tr>'
+
+# ---------------------------------------------------------------- product blend block
+_b = blend
+_nl, _ns = _b["nested_linear"], _b["nested_stacker"]
+_band = _b["beats_elo_band"]
+_band_txt = f"w &isin; [{_band[0]:.2f}, {_band[1]:.2f}]" if _band else "none"
+_marks = _b["sweep"].iloc[::2]  # step is 0.05 → every other row is a 0.1 grid mark
+_sweep_head = "".join(f'<th class="num">{row.w:.1f}</th>' for row in _marks.itertuples())
+_sweep_cells = "".join(
+    f'<td class="num{" win" if abs(row.w - _b["loeo_weight"]) < 1e-9 else ""}">{row.rps:.4f}</td>'
+    for row in _marks.itertuples())
+
+
+def _bake_row(name, res):
+    served = ' <span class="pill pill-green">served</span>' if res["combiner"] == _b["chosen_combiner"] else ""
+    return (f'<tr><td>{name}{served}</td><td class="num">{res["rps"]:.4f}</td>'
+            f'<td class="num">{res["log_loss"]:.4f}</td></tr>')
+
+
+_bake_rows = _bake_row("Linear pool — global w*", _nl) + _bake_row("Logistic stacker", _ns)
+_cn = _b["chosen_nested"]
+_corr = _b["error_correlation"]
+BLEND_HTML = f"""
+<h4>Product model — a blend of Elo + profile <span class="pill pill-purp">not a gate pass</span></h4>
+<div class="card">
+<p>The gate above forbids Elo as a model feature, so the pure bottom-up model is the honest research
+result. For the live 2026 <b>product</b> we may still serve a <b>blend of the two models' outputs</b> —
+<code>P = w·profile + (1−w)·Elo</code> — a product decision that can never count as a bottom-up gate
+pass. We pool the already-calibrated, leakage-free fold predictions (no new features, no retraining);
+the weight is chosen <b>nested</b> (on strictly-prior editions only) so the reported number is honest.</p>
+<div class="cmp">Nested blend (served, {_b['chosen_combiner']}, w={_b['loeo_weight']:.2f}): RPS
+ <b>{_cn['rps']:.4f}</b> vs Elo {_b['elo_rps']:.4f} {'✓' if _cn['rps'] < _b['elo_rps'] else '✗'} &nbsp;·&nbsp;
+ log-loss <b>{_cn['log_loss']:.4f}</b> vs Elo {_b['elo_log_loss']:.4f} {'✓' if _cn['log_loss'] < _b['elo_log_loss'] else '✗'}
+ &nbsp;→&nbsp; <b>{'beats Elo' if _b['beats_elo'] else 'does NOT beat Elo'}</b></div>
+<div class="two" style="margin-top:14px">
+ <div><h4 style="margin:0 0 6px">Weight sweep — pooled RPS by profile share <code>w</code></h4>
+  <table><thead><tr><th>w</th>{_sweep_head}</tr></thead>
+  <tbody><tr><td class="mut">RPS</td>{_sweep_cells}</tr></tbody></table>
+  <div class="note">Pooled optimum <b>w*={_b['loeo_weight']:.2f}</b> (highlighted) dips to {_marks['rps'].min():.4f},
+  beats-Elo band {_band_txt}. But this ~1-DoF in-sample edge does <b>not</b> survive honest nested
+  weight-selection.</div></div>
+ <div><h4 style="margin:0 0 6px">Combiner bake-off (nested, out-of-sample)</h4>
+  <table><thead><tr><th>Combiner</th><th class="num">RPS ↓</th><th class="num">log-loss ↓</th></tr></thead>
+  <tbody>{_bake_rows}</tbody></table>
+  <div class="note">The stacker's edge is within noise (&lt; 0.001 RPS), so the simpler, more robust
+  global-weight pool is served. Locked into <code>config.blend</code> for Phase 4.</div></div>
+</div>
+<div class="note" style="margin-top:12px"><b>Why it doesn't beat Elo:</b> the two models' per-match
+errors are too correlated (RPS-error corr <b>{_corr:+.3f}</b>) — they miss on the same matches, so
+averaging cancels little. A blend beats both members only when their errors are <i>decorrelated</i>.
+The modest <b>w={_b['loeo_weight']:.2f}</b> share is served on <b>thesis grounds</b> — it adds
+roster-churn-robust talent signal the historical backtest can't reward (past tournaments churned
+squads less than a World Cup) — <b>not</b> because it is shown to beat Elo. To make a blend actually
+win, add the missing ingredient (recent <b>form</b> / squad cohesion), not more of the same signal.</div>
+</div>"""
 
 tbl_counts = "".join(f'<tr><td class="mono">{n}</td><td class="num">{c}</td><td class="mut">{d}</td></tr>' for n, c, d in COUNTS)
 tbl_modules = "".join(f'<tr><td class="mono">{n}</td><td class="mono mut">{m}</td><td class="mut">{d}</td></tr>' for n, m, d in MODULES)
@@ -277,6 +347,7 @@ td{padding:8px 10px;border-bottom:1px solid #161d29;vertical-align:top}tr:hover 
 .pill-amber{background:rgba(210,153,34,.14);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
 .pill-blue{background:rgba(76,194,255,.12);color:var(--accent);border:1px solid rgba(76,194,255,.3)}
 .pill-green{background:rgba(63,185,80,.14);color:var(--green);border:1px solid rgba(63,185,80,.35)}
+.pill-purp{background:rgba(188,140,255,.14);color:#bc8cff;border:1px solid rgba(188,140,255,.35)}
 .cbar{display:grid;grid-template-columns:175px 1fr;align-items:center;gap:14px;margin:8px 0}
 .cbar-label{font-size:13px;color:#cdd6e2;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar-row{display:flex;align-items:center;gap:12px}.bar-track{flex:1;height:17px;background:#0c1119;border:1px solid #1c2433;border-radius:6px;overflow:hidden}
@@ -322,6 +393,7 @@ turnover breaks.</p>
  <div class="kpi"><div class="kpi-val">{elo['rps']:.4f}</div><div class="kpi-label">Elo bar to beat</div><div class="kpi-sub">reference baseline</div></div>
  <div class="kpi"><div class="kpi-val kpi-good">~60%</div><div class="kpi-label">of gap closed</div><div class="kpi-sub">by enrichment + parsimony</div></div>
  <div class="kpi"><div class="kpi-val kpi-fail">FAIL</div><div class="kpi-label">Success gate</div><div class="kpi-sub">Elo still best on RPS</div></div>
+ <div class="kpi"><div class="kpi-val" style="color:#bc8cff">{blend['chosen_nested']['rps']:.4f}</div><div class="kpi-label">Blend (product)</div><div class="kpi-sub">nested · also &lt; Elo? no</div></div>
 </div>
 
 <!-- ============ 1. WHAT EXISTS ============ -->
@@ -344,7 +416,7 @@ turnover breaks.</p>
   <div class="note">Only finals matches where <i>both</i> teams have a squad profile. W/D/L mix: 43.8% / 25.6% / 30.5%.</div></div>
 </div>
 <div class="callout">Quality bar built in: <b>no data leakage</b> (every attribute predates its match), a dedicated
-leakage test suite, and <b>84 passing tests</b>. The success gate is intentionally strict and is reported honestly.</div>
+leakage test suite, and <b>92 passing tests</b>. The success gate is intentionally strict and is reported honestly.</div>
 </section>
 
 <!-- ============ 2. HOW IT WORKS ============ -->
@@ -422,6 +494,8 @@ is now the strongest single feature.</div>
 <div class="verdict"><h4>✗ GATE FAILED (but close)</h4>The best profile model must beat <b>both</b> baselines on <b>RPS and log-loss</b>.
 <div class="cmp">{verdict['best_model']} — RPS {verdict['best_rps']:.4f} ✗ vs Elo {verdict['baseline_rps']:.4f} &nbsp;·&nbsp; log-loss {verdict['best_log_loss']:.4f} ✗ vs Elo {verdict['baseline_log_loss']:.4f}</div></div></div>
 
+{BLEND_HTML}
+
 <h4>Where the profile model wins &amp; loses (RPS per held-out edition)</h4>
 <div class="card"><table><thead><tr><th>Edition</th><th class="num">n</th><th class="num">Elo</th><th class="num">Squad-ovr</th><th class="num">LogReg</th><th class="num">HGB</th></tr></thead><tbody>{pe}</tbody></table>
 <div class="note"><span class="win">Green</span> = a profile model beats Elo on that edition; <b>bold</b> = best in row.
@@ -456,8 +530,10 @@ carry the signal; unit-level and value features add little.</div></div>
 <section id="suggest"><h2>05 — Suggestions</h2><h3>Recommended path, prioritized</h3>
 <p>My professional read: the bottom-up thesis is <b>partly validated</b> — squad talent carries real, well-calibrated
 signal and beats Elo on rich-coverage editions — but pure squad attributes are unlikely to fully overtake Elo, whose
-edge is recent form. The pragmatic split is to keep the <b>pure model as the research artifact</b> (the honest gate) and,
-for the actual 2026 <b>product</b>, serve a model that also sees form. Ordered by value-for-effort:</p>
+edge is recent form. We tested the obvious shortcut — <b>blending the profile model with Elo</b> — and it does
+<b>not</b> beat Elo out-of-sample (the errors are too correlated, 0.774). The honest split therefore stands: keep the
+<b>pure model as the research artifact</b> (the gate), serve a modest blend as the 2026 product, and invest in the one
+lever that can actually win — a <b>recent-form signal</b>. Ordered by value-for-effort:</p>
 <div class="card" style="padding-top:8px">{sug}</div>
 <div class="callout acc">Bottom line: this is a <b>genuine, honestly-reported result</b>, not a dead end. The pipeline is sound, the
 methodology is leakage-free and reproducible, and there is a clear, prioritized path both to a stronger model and to a
@@ -465,7 +541,7 @@ shippable 2026 predictor.</div>
 </section>
 
 <div class="foot"><span>World-Cup-2026-ML-Pipeline · branch <code>phase-3-enrich-retry</code> · {n_pooled} held-out matches</span>
-<span>Reproduce: <code>python reports/generate_full_report.py</code> · 84 tests passing</span></div>
+<span>Reproduce: <code>python reports/generate_full_report.py</code> · 92 tests passing</span></div>
 </div></body></html>"""
 
 OUT.write_text(HTML)

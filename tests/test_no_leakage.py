@@ -12,6 +12,7 @@ Two layers are checked:
 
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -37,6 +38,42 @@ def test_assign_editions_never_attaches_a_future_snapshot():
     assert int(out.iloc[0]["edition_year"]) == 2018  # the future 2022 edition is ignored
     snap = pd.to_datetime(out.iloc[0]["snapshot_date"])
     assert snap <= pd.to_datetime(out.iloc[0]["date"])
+
+
+def test_nested_blend_weight_uses_only_strictly_prior_editions():
+    """The product blend introduces no new leakage: the combiner weight for an outer edition is
+    chosen on **strictly-prior** inner editions only, never peeking at the edition it scores.
+
+    Construct a worst-case probe. The two inner editions are perfectly predicted by Elo (``p_b``)
+    and badly by the profile (``p_a``), so the honest inner sweep picks ``w*=0`` (all-Elo). The
+    outer edition is the reverse — profile is perfect, Elo is wrong — so a *leaky* combiner that
+    peeked at the outer edition would pick ``w=1`` (all-profile). A leakage-free nested eval must
+    apply the inner-derived ``w*=0`` to the outer edition, i.e. its prediction equals the Elo
+    probabilities, not the profile ones.
+    """
+    from src.models.blend import nested_blend_eval
+
+    elo_perfect, profile_perfect = [[1.0, 0.0, 0.0]], [[1.0, 0.0, 0.0]]
+    wrong = [[0.0, 0.0, 1.0]]  # confident, wrong (actual is always "H")
+    y = ["H", "H", "H"]
+    folds = [
+        # inner: Elo perfect, profile wrong -> inner sweep favours all-Elo (w*=0)
+        {"edition": "E1", "order": 1, "idx": np.array([0]), "p_a": np.array(wrong),
+         "p_b": np.array(elo_perfect), "y": ["H"]},
+        {"edition": "E2", "order": 2, "idx": np.array([1]), "p_a": np.array(wrong),
+         "p_b": np.array(elo_perfect), "y": ["H"]},
+        # outer: profile perfect, Elo wrong -> a leaky combiner would pick w=1 here
+        {"edition": "E3", "order": 3, "idx": np.array([2]), "p_a": np.array(profile_perfect),
+         "p_b": np.array(wrong), "y": ["H"]},
+    ]
+    res = nested_blend_eval(folds, y, combiner="linear")
+    outer_pred = res["pred"][2]
+    # Used the inner-derived all-Elo weight on the outer edition (== Elo proba, the wrong one here).
+    assert np.allclose(outer_pred, wrong[0]), "nested blend weight leaked the outer edition"
+    # And explicitly NOT the outer-optimal profile prediction.
+    assert not np.allclose(outer_pred, profile_perfect[0])
+    e3 = next(f for f in res["folds"] if f["edition"] == "E3")
+    assert e3["n_inner_editions"] == 2 and e3["w"] == 0.0
 
 
 @_DB
